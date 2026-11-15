@@ -1,9 +1,11 @@
 import { useEffect, useImperativeHandle, useRef, useState, type Ref } from 'react';
 import { Scene, type Period } from '../scene/engine';
 import { stageFor, VERSES } from '../lib/growth';
+import { useT } from '../lib/i18n';
 
 export interface HeroHandle {
-  celebrate(o: { points: number; stageName?: string; arrivals?: string[] }): void;
+  /** stage: the stage just reached, if any; arrivals: the stages whose animals just moved in. */
+  celebrate(o: { points: number; stage?: number; arrivals?: number[] }): void;
   sparkle(): void;
 }
 
@@ -18,14 +20,8 @@ interface Props {
   ref?: Ref<HeroHandle>;
 }
 
-const GREETING: Record<Period, string> = {
-  dawn: 'Good morning',
-  day: 'Good day',
-  dusk: 'Good evening',
-  night: 'Good night',
-};
-
 export default function Hero({ points, seed, species, hour, owner, onBack, onPeriod, ref }: Props) {
+  const t = useT();
   const boxRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const scene = useRef<Scene | null>(null);
@@ -33,8 +29,9 @@ export default function Hero({ points, seed, species, hour, owner, onBack, onPer
   const verseIdx = useRef(Math.floor(Math.random() * VERSES.length));
   const [period, setPeriod] = useState<Period>('day');
   const [floaters, setFloaters] = useState<{ id: number; text: string }[]>([]);
-  const [banner, setBanner] = useState<{ key: number; title: string; lines: string[] } | null>(null);
-  const [verse, setVerse] = useState<{ key: number; ref: string; text: string } | null>(null);
+  // Kept as numbers so they show in whichever language is chosen.
+  const [banner, setBanner] = useState<{ key: number; stage: number; arrivals: number[] } | null>(null);
+  const [verse, setVerse] = useState<{ key: number; index: number } | null>(null);
 
   useEffect(() => {
     const s = new Scene(canvasRef.current!, { points, seed, species, hour });
@@ -57,13 +54,13 @@ export default function Hero({ points, seed, species, hour, owner, onBack, onPer
   }, [points, seed, species, hour]);
 
   useImperativeHandle(ref, () => ({
-    celebrate({ points: p, stageName, arrivals }) {
-      scene.current?.burst(stageName ? 80 : 30);
+    celebrate({ points: p, stage, arrivals }) {
+      scene.current?.burst(stage != null ? 80 : 30);
       const id = ++uid.current;
       setFloaters((f) => [...f, { id, text: `+${p}` }]);
       setTimeout(() => setFloaters((f) => f.filter((x) => x.id !== id)), 1800);
-      if (stageName) {
-        setBanner({ key: id, title: stageName, lines: (arrivals ?? []).map((a) => `${a} moved in!`) });
+      if (stage != null) {
+        setBanner({ key: id, stage, arrivals: arrivals ?? [] });
         setTimeout(() => setBanner((b) => (b?.key === id ? null : b)), 4500);
       }
     },
@@ -80,20 +77,21 @@ export default function Hero({ points, seed, species, hour, owner, onBack, onPer
 
   function shake() {
     scene.current?.rustle();
-    const v = VERSES[verseIdx.current++ % VERSES.length];
-    setVerse({ ...v, key: verseIdx.current });
+    const index = verseIdx.current++ % VERSES.length;
+    setVerse({ index, key: verseIdx.current });
   }
 
   const info = stageFor(points);
+  const shown = verse && t.verses[verse.index];
 
   return (
-    <section className={`hero hero-${period}`} ref={boxRef} aria-label="Your tree">
+    <section className={`hero hero-${period}`} ref={boxRef} aria-label={t.yourTree}>
       <canvas
         ref={canvasRef}
         className="hero-canvas"
         role="button"
         tabIndex={0}
-        aria-label={`${owner ? `${owner}'s` : 'Your'} tree: ${info.stage.name}. Press to shake the branches and read a verse.`}
+        aria-label={t.treeLabel(owner, t.stages[info.index])}
         onClick={shake}
         onKeyDown={(e) => {
           if (e.key === 'Enter' || e.key === ' ') {
@@ -107,21 +105,19 @@ export default function Hero({ points, seed, species, hour, owner, onBack, onPer
         {owner ? (
           <div className="hero-chip">
             <button className="btn btn-small" onClick={onBack}>
-              ← My tree
+              {t.backToMine}
             </button>
-            <span>
-              Visiting <strong>{owner}</strong>’s tree
-            </span>
+            <span>{t.visiting(owner)}</span>
           </div>
         ) : (
-          <div className="hero-chip">{GREETING[period]}</div>
+          <div className="hero-chip">{t.greeting[period]}</div>
         )}
       </div>
 
       <div className="hero-hud">
         <div className="hud-row">
-          <h2 className="hud-stage">{info.stage.name}</h2>
-          <span className="hud-points">{points} growth</span>
+          <h2 className="hud-stage">{t.stages[info.index]}</h2>
+          <span className="hud-points">{t.growthPoints(points)}</span>
         </div>
         <div
           className="progress"
@@ -129,19 +125,11 @@ export default function Hero({ points, seed, species, hour, owner, onBack, onPer
           aria-valuemin={0}
           aria-valuemax={100}
           aria-valuenow={Math.round(info.progress * 100)}
-          aria-label="Progress to next stage"
+          aria-label={t.toNextLabel}
         >
           <div className="progress-fill" style={{ width: `${info.progress * 100}%` }} />
         </div>
-        <p className="hud-next">
-          {info.next ? (
-            <>
-              {info.toNext} more to <strong>{info.next.name}</strong>
-            </>
-          ) : (
-            'Fully grown — keep tending it.'
-          )}
-        </p>
+        <p className="hud-next">{info.next ? t.toNext(info.toNext, t.stages[info.index + 1]) : t.fullyGrown}</p>
       </div>
 
       {floaters.map((f) => (
@@ -151,19 +139,21 @@ export default function Hero({ points, seed, species, hour, owner, onBack, onPer
       ))}
       {banner && (
         <div key={banner.key} className="levelup" role="status">
-          <span className="levelup-kicker">The tree grew!</span>
-          <span className="levelup-name">{banner.title}</span>
-          {banner.lines.map((l) => (
-            <span key={l} className="levelup-kicker">
-              {l}
+          <span className="levelup-kicker">{t.treeGrew}</span>
+          <span className="levelup-name">{t.stages[banner.stage]}</span>
+          {banner.arrivals.map((a) => (
+            <span key={a} className="levelup-kicker">
+              {t.arrived[a]}
             </span>
           ))}
         </div>
       )}
-      {verse && (
+      {verse && shown && (
         <button key={verse.key} className="verse-bubble" onClick={() => setVerse(null)}>
-          <span>“{verse.text}”</span>
-          <span className="verse-ref">{verse.ref} (KJV)</span>
+          <span>“{shown.text}”</span>
+          <span className="verse-ref">
+            {shown.ref} ({t.bible})
+          </span>
         </button>
       )}
     </section>

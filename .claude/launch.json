@@ -6,6 +6,18 @@
       "runtimeExecutable": "npm",
       "runtimeArgs": ["run", "dev"],
       "port": 5173
+    },
+    {
+      "name": "rooted-trial",
+      "runtimeExecutable": "cmd",
+      "runtimeArgs": ["/c", "set VITE_SUPABASE_URL=your-project-ref&& npx vite --port 5177"],
+      "port": 5177
+    },
+    {
+      "name": "rooted-preview",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["run", "preview", "--", "--port", "4173"],
+      "port": 4173
     }
   ]
 }

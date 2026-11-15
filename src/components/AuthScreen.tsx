@@ -1,16 +1,19 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { backend } from '../lib/backend';
 import { Scene } from '../scene/engine';
+import { errorText, useT } from '../lib/i18n';
+import LangSwitch from './LangSwitch';
 
 /** One short form: name, email, password — and you are in. */
 export default function AuthScreen() {
+  const t = useT();
   const [mode, setMode] = useState<'signup' | 'signin'>('signup');
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [info, setInfo] = useState<string | null>(null);
+  const [confirmSent, setConfirmSent] = useState(false);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const local = backend.mode === 'local';
 
@@ -30,18 +33,19 @@ export default function AuthScreen() {
     e.preventDefault();
     setBusy(true);
     setError(null);
-    setInfo(null);
+    setConfirmSent(false);
     try {
       if (mode === 'signup') {
         const { needsConfirm } = await backend.signUp({ name: name.trim(), email: email.trim(), password });
         if (needsConfirm) {
-          setInfo('Account created. Confirm the email we sent you, then sign in.');
+          setConfirmSent(true);
           setMode('signin');
         }
       } else {
         await backend.signIn({ email: email.trim(), password });
       }
     } catch (err) {
+      // kept in English and translated when shown, so switching language updates it
       setError(err instanceof Error ? err.message : 'Something went wrong.');
     } finally {
       setBusy(false);
@@ -52,29 +56,30 @@ export default function AuthScreen() {
     <div className="auth">
       <canvas ref={canvasRef} className="auth-bg" aria-hidden="true" />
       <form className="px-panel auth-card" onSubmit={submit}>
+        <LangSwitch className="lang-auth" />
         <h1 className="brand-title">Rooted</h1>
-        <p className="muted auth-sub">A tree that grows with your walk of faith.</p>
+        <p className="muted auth-sub">{t.tagline}</p>
         <div className="tabs" role="tablist">
           <button type="button" role="tab" aria-selected={mode === 'signup'} className={`tab ${mode === 'signup' ? 'is-on' : ''}`} onClick={() => setMode('signup')}>
-            Create account
+            {t.createAccount}
           </button>
           <button type="button" role="tab" aria-selected={mode === 'signin'} className={`tab ${mode === 'signin' ? 'is-on' : ''}`} onClick={() => setMode('signin')}>
-            Sign in
+            {t.signIn}
           </button>
         </div>
         {mode === 'signup' && (
           <label className="field">
-            <span className="field-label">Your name</span>
+            <span className="field-label">{t.yourName}</span>
             <input type="text" required maxLength={40} autoComplete="name" value={name} onChange={(e) => setName(e.target.value)} />
           </label>
         )}
         <label className="field">
-          <span className="field-label">Email</span>
+          <span className="field-label">{t.email}</span>
           <input type="email" required autoComplete="email" value={email} onChange={(e) => setEmail(e.target.value)} />
         </label>
         {!local && (
           <label className="field">
-            <span className="field-label">Password</span>
+            <span className="field-label">{t.password}</span>
             <input
               type="password"
               required
@@ -87,14 +92,14 @@ export default function AuthScreen() {
         )}
         {error && (
           <p className="form-error" role="alert">
-            {error}
+            {errorText(t, error)}
           </p>
         )}
-        {info && <p className="form-info">{info}</p>}
+        {confirmSent && <p className="form-info">{t.confirmEmail}</p>}
         <button className="btn btn-primary btn-block" disabled={busy}>
-          {busy ? 'Please wait…' : mode === 'signup' ? 'Plant my tree' : 'Sign in'}
+          {busy ? t.pleaseWait : mode === 'signup' ? t.plantTree : t.signIn}
         </button>
-        {local && <p className="muted small">Trial mode: accounts live only in this browser until Supabase is connected.</p>}
+        {local && <p className="muted small">{t.localTrial}</p>}
       </form>
     </div>
   );

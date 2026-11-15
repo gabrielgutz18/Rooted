@@ -830,6 +830,42 @@ p {
   color: var(--accent-ink);
 }
 
+/* ---------- language: English / Tagalog ---------- */
+.lang {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+}
+.lang-label {
+  font-family: var(--font-px);
+  font-size: 12px;
+  color: var(--ink-dim);
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  margin-right: 4px;
+}
+.lang-btn {
+  font-family: var(--font-px);
+  font-weight: 600;
+  font-size: 13px;
+  padding: 4px 10px;
+  margin: 2px;
+  border: 0;
+  cursor: pointer;
+  background: var(--panel-2);
+  color: var(--ink);
+  box-shadow: 0 0 0 2px var(--line);
+}
+.lang-btn.is-on {
+  background: var(--accent);
+  color: var(--accent-ink);
+}
+.lang-auth {
+  justify-self: center;
+  justify-content: center;
+}
+
 /* ---------- tree picker ---------- */
 .modal-scrim {
   position: fixed;
@@ -850,6 +886,15 @@ p {
 }
 .picker:focus {
   outline: none;
+}
+.picker-narrow {
+  width: min(480px, calc(100% - 32px));
+}
+.steps {
+  margin: 0;
+  padding-left: 22px;
+  display: grid;
+  gap: 8px;
 }
 .picker-grid {
   display: grid;
@@ -937,6 +982,46 @@ p {
   font-weight: 700;
   box-shadow: 0 0 0 3px #160c1c;
   cursor: pointer;
+}
+.toast-info {
+  background: var(--accent);
+  color: var(--accent-ink);
+}
+.tag-pending {
+  background: transparent;
+  color: var(--ink-dim);
+  box-shadow: 0 0 0 2px var(--ink-dim);
+}
+
+/* ---------- private notes: unlock + recovery key ---------- */
+.stack {
+  display: grid;
+  gap: 14px;
+}
+.link-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px 10px;
+}
+.field input.mono {
+  font-family: ui-monospace, 'Cascadia Mono', Consolas, monospace;
+  letter-spacing: 1px;
+}
+.recovery-key {
+  display: block;
+  margin: 2px;
+  padding: 14px 10px;
+  text-align: center;
+  font-family: ui-monospace, 'Cascadia Mono', Consolas, monospace;
+  font-size: 17px;
+  font-weight: 700;
+  letter-spacing: 1px;
+  line-height: 1.6;
+  overflow-wrap: anywhere;
+  user-select: all;
+  background: var(--input-bg);
+  color: var(--ink);
+  box-shadow: 0 0 0 2px var(--line);
 }
 @media (max-width: 520px) {
   .px-panel {

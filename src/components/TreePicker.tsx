@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'react';
 import { Scene } from '../scene/engine';
 import { SPECIES, type Species } from '../scene/species';
+import { useT } from '../lib/i18n';
 
 interface Props {
   current: string | null | undefined;
@@ -12,6 +13,7 @@ interface Props {
 
 /** Choose which tree your notes grow. Each card is a small living scene. */
 export default function TreePicker({ current, first, hour, onPick, onClose }: Props) {
+  const t = useT();
   const box = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -27,15 +29,13 @@ export default function TreePicker({ current, first, hour, onPick, onClose }: Pr
       <div ref={box} className="px-panel picker" role="dialog" aria-modal="true" aria-labelledby="picker-title" tabIndex={-1}>
         <div className="composer-head">
           <h2 id="picker-title" className="panel-title">
-            {first ? 'Which tree will you grow?' : 'Choose your tree'}
+            {first ? t.pickFirstTitle : t.pickTitle}
           </h2>
           <button className="btn btn-small" onClick={onClose}>
-            {first ? 'Keep the oak' : 'Close'}
+            {first ? t.keepOak : t.close}
           </button>
         </div>
-        <p className="muted">
-          {first ? 'Every note you write helps it grow. You can switch any time.' : 'Your growth stays the same — only the kind of tree changes.'}
-        </p>
+        <p className="muted">{first ? t.pickFirstBlurb : t.pickBlurb}</p>
         <div className="picker-grid">
           {SPECIES.map((s) => (
             <TreeCard key={s.id} species={s} hour={hour} selected={(current ?? 'oak') === s.id} onPick={() => onPick(s.id)} />
@@ -47,6 +47,7 @@ export default function TreePicker({ current, first, hour, onPick, onClose }: Pr
 }
 
 function TreeCard({ species, hour, selected, onPick }: { species: Species; hour?: number; selected: boolean; onPick(): void }) {
+  const t = useT();
   const view = useRef<HTMLDivElement>(null);
   const canvas = useRef<HTMLCanvasElement>(null);
 
@@ -66,10 +67,10 @@ function TreeCard({ species, hour, selected, onPick }: { species: Species; hour?
         <canvas ref={canvas} aria-hidden="true" />
       </div>
       <span className="tree-card-name">
-        {species.name}
-        {selected && <span className="tag">growing</span>}
+        {t.species[species.id].name}
+        {selected && <span className="tag">{t.growing}</span>}
       </span>
-      <span className="tree-card-blurb">{species.blurb}</span>
+      <span className="tree-card-blurb">{t.species[species.id].blurb}</span>
     </button>
   );
 }

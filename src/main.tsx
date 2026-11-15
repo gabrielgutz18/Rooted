@@ -1,3 +1,4 @@
+import './lib/install'; // first, to catch the browser's install prompt
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import App from './App';
