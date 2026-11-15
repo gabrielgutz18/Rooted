@@ -1,0 +1,23 @@
+# dependencies and build output (recreated by npm install / npm run build)
+node_modules/
+dist/
+*.tsbuildinfo
+
+# secrets: Supabase keys live here — never commit
+.env
+.env.*
+!.env.example
+
+# Supabase CLI local state
+supabase/.temp/
+supabase/.branches/
+
+# personal editor / tool settings
+.claude/settings.local.json
+.vscode/
+.idea/
+
+# logs and OS junk
+*.log
+.DS_Store
+Thumbs.db
