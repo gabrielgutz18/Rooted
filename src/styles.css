@@ -246,6 +246,9 @@ p {
   font-size: 16px;
   padding: 9px 12px;
 }
+.side-link-meta {
+  font-weight: 400;
+}
 .side-link.is-on,
 .friend.is-on {
   background: var(--accent);
@@ -825,6 +828,91 @@ p {
 .tab.is-on {
   background: var(--accent);
   color: var(--accent-ink);
+}
+
+/* ---------- tree picker ---------- */
+.modal-scrim {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  background: rgb(8 6 16 / 0.6);
+}
+.picker {
+  position: fixed;
+  z-index: 41;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  width: min(880px, calc(100% - 32px));
+  max-height: calc(100vh - 40px);
+  overflow-y: auto;
+  margin: 0;
+}
+.picker:focus {
+  outline: none;
+}
+.picker-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 12px;
+}
+.tree-card {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 4px;
+  align-content: start;
+  margin: 2px;
+  padding: 0 0 10px;
+  border: 0;
+  text-align: left;
+  cursor: pointer;
+  color: var(--ink);
+  background: var(--panel-2);
+  box-shadow: 0 0 0 2px var(--line);
+}
+.tree-card:hover {
+  filter: brightness(1.06);
+}
+.tree-card.is-on {
+  box-shadow:
+    0 0 0 2px var(--line),
+    0 0 0 6px var(--accent);
+}
+.tree-card-view {
+  position: relative;
+  height: 150px;
+  overflow: hidden;
+  box-shadow: 0 2px 0 0 var(--line);
+}
+.tree-card-view canvas {
+  position: absolute;
+  left: 0;
+  top: 0;
+  display: block;
+  image-rendering: pixelated;
+}
+.tree-card-name {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px 0;
+  font-family: var(--font-px);
+  font-weight: 600;
+  font-size: 17px;
+}
+.tree-card-blurb {
+  padding: 0 10px;
+  font-size: 13px;
+  color: var(--ink-dim);
+}
+@media (max-width: 520px) {
+  .picker-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+  }
+  .tree-card-view {
+    height: 120px;
+  }
 }
 
 /* ---------- misc ---------- */

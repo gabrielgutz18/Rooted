@@ -6,12 +6,15 @@ import Hero, { type HeroHandle } from './components/Hero';
 import Heatmap from './components/Heatmap';
 import { Composer, Notes } from './components/Diary';
 import AuthScreen from './components/AuthScreen';
+import TreePicker from './components/TreePicker';
+import { speciesOf } from './scene/species';
 
-// ?hour=21 previews another time of day.
+// ?hour=21 previews another time of day; ?tree=sakura previews another kind of tree.
 const hourParam = (() => {
   const h = Number(new URLSearchParams(location.search).get('hour'));
   return location.search.includes('hour=') && h >= 0 && h < 24 ? h : undefined;
 })();
+const treeParam = new URLSearchParams(location.search).get('tree') ?? undefined;
 
 const message = (err: unknown) =>
   err && typeof err === 'object' && 'message' in err ? String((err as { message: unknown }).message) : 'Something went wrong.';
@@ -40,6 +43,8 @@ function Garden({ userId }: { userId: string }) {
   const [view, setView] = useState<View>({ kind: 'home' });
   const [visitDays, setVisitDays] = useState<DayStat[]>([]);
   const [menuOpen, setMenuOpen] = useState(false);
+  const [picking, setPicking] = useState(false);
+  const askedTree = useRef(false);
   const hero = useRef<HeroHandle>(null);
 
   const loadPeople = useCallback(() => backend.listProfiles().then(setPeople), []);
@@ -55,6 +60,36 @@ function Garden({ userId }: { userId: string }) {
     const t = setTimeout(() => setError(null), 8000);
     return () => clearTimeout(t);
   }, [error]);
+
+  // First visit: ask which tree to grow (once).
+  useEffect(() => {
+    if (me && me.tree == null && !askedTree.current) {
+      askedTree.current = true;
+      setPicking(true);
+    }
+  }, [me]);
+
+  async function chooseTree(tree: string) {
+    setPicking(false);
+    if (!me || me.tree === tree) return;
+    const before = me.tree;
+    setMe({ ...me, tree });
+    setPeople((list) => list.map((p) => (p.id === me.id ? { ...p, tree } : p)));
+    try {
+      await backend.setTree(tree);
+      hero.current?.sparkle();
+    } catch (err) {
+      setMe((m) => (m ? { ...m, tree: before } : m));
+      setError(message(err));
+    }
+  }
+
+  const closePicker = useCallback(() => {
+    // closing the first-visit picker keeps the oak
+    if (me && me.tree == null) chooseTree('oak');
+    else setPicking(false);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [me]);
 
   const points = useMemo(() => entries.reduce((s, e) => s + e.points, 0), [entries]);
   const myDays = useMemo(() => dayStats(entries), [entries]);
@@ -115,6 +150,15 @@ function Garden({ userId }: { userId: string }) {
           <button className={`side-link ${view.kind === 'home' ? 'is-on' : ''}`} onClick={() => go({ kind: 'home' })}>
             My tree
           </button>
+          <button
+            className="side-link"
+            onClick={() => {
+              setMenuOpen(false);
+              setPicking(true);
+            }}
+          >
+            Choose tree · <span className="side-link-meta">{speciesOf(me?.tree).name}</span>
+          </button>
           {me?.is_admin && (
             <button className={`side-link ${view.kind === 'admin' ? 'is-on' : ''}`} onClick={() => go({ kind: 'admin' })}>
               Admin · users
@@ -129,7 +173,7 @@ function Garden({ userId }: { userId: string }) {
               <button className={`friend ${visiting?.id === p.id ? 'is-on' : ''}`} onClick={() => go({ kind: 'visit', profile: p })} title={`Visit ${p.display_name}'s tree`}>
                 <span className="friend-name">{p.display_name}</span>
                 <span className="friend-meta">
-                  {stageFor(p.points).stage.name} · {p.points}
+                  {speciesOf(p.tree).name} · {stageFor(p.points).stage.name} · {p.points}
                 </span>
               </button>
             </li>
@@ -148,6 +192,7 @@ function Garden({ userId }: { userId: string }) {
           ref={hero}
           points={visiting ? visiting.points : points}
           seed={visiting ? visiting.id : userId}
+          species={visiting ? (visiting.tree ?? undefined) : (treeParam ?? me?.tree ?? undefined)}
           hour={hourParam}
           owner={visiting?.display_name}
           onBack={() => go({ kind: 'home' })}
@@ -192,6 +237,8 @@ function Garden({ userId }: { userId: string }) {
           {view.kind === 'admin' && <Admin onError={setError} />}
         </div>
       </div>
+
+      {picking && <TreePicker current={me?.tree} first={me?.tree == null} hour={hourParam} onPick={chooseTree} onClose={closePicker} />}
 
       {error && (
         <div className="toast" role="alert" onClick={() => setError(null)}>

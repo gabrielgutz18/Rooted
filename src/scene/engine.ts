@@ -1,13 +1,19 @@
-// The living scene: a procedural pixel tree that grows with points, swaying in the wind,
-// with sky, hills, weather-of-the-hour and animals that move in as it gets bigger.
-// Everything is drawn into a small buffer and scaled up, so "zooming out" is simply
-// a bigger buffer: the tree keeps its chunky pixels while the world around it widens.
+// The living scene: a procedural tree that grows with points and moves in the wind,
+// with sky, hills, time-of-day light and animals that move in as it gets bigger.
+//
+// It is drawn as fine "32-bit era" pixel art on a fixed grid of small pixels (about
+// 2.6 CSS px each). As the tree grows the camera zooms out: things are drawn smaller,
+// but a pixel stays the same size. Light comes from wherever the sun (or moon) is.
 
 import { growthValue, STAGES } from '../lib/growth';
+import { buildBackdrop, makeCloud } from './backdrop';
+import { clumpSprite, edgeLeaves, EDGE_MAX, type ClumpStyle } from './foliage';
+import { buildTree, speciesOf, type Species, type Tree } from './species';
 import { getSprites, type Sprite } from './sprites';
-
-const MAXD = 6;
-const TAU = Math.PI * 2;
+import {
+  Pix, TAU, bayer, blit, clamp, grade, gradeAll, gradeSprite, h2, hashStr, hex, leafMask, limb, mixc, mulberry32, noise1,
+  norm3, scalec, stamp, type Grade, type Light, type PSprite,
+} from './raster';
 
 export type Period = 'dawn' | 'day' | 'dusk' | 'night';
 export function periodForHour(h: number): Period {
@@ -17,110 +23,32 @@ export function periodForHour(h: number): Period {
   return 'night';
 }
 
-const SKY: Record<Period, { stops: [string, string, string]; cloud: string; tint: string | null }> = {
-  dawn: { stops: ['#6a7fc0', '#f0a890', '#ffd8a0'], cloud: '#ffe6d6', tint: 'rgba(255,150,110,0.14)' },
-  day: { stops: ['#5fa8e0', '#9cd2f0', '#d8f0f4'], cloud: '#ffffff', tint: null },
-  dusk: { stops: ['#3a2f6a', '#c05a6a', '#f4a060'], cloud: '#f0b0a0', tint: 'rgba(120,40,80,0.26)' },
-  night: { stops: ['#0a0e2a', '#161c48', '#28306a'], cloud: '#343e74', tint: 'rgba(10,16,60,0.52)' },
+const SKY: Record<Period, { stops: [string, string, string]; cloud: [string, string, string] }> = {
+  dawn: { stops: ['#6a7fc0', '#f0a890', '#ffd8a0'], cloud: ['#fff0e4', '#f4c8b8', '#c89aa0'] },
+  day: { stops: ['#4f9ee0', '#94ccf0', '#d8f0f4'], cloud: ['#ffffff', '#e2edf6', '#b4c6dc'] },
+  dusk: { stops: ['#3a2f6a', '#c05a6a', '#f4a060'], cloud: ['#f8c4b0', '#d88a90', '#8a5a7a'] },
+  night: { stops: ['#0a0e2a', '#161c48', '#28306a'], cloud: ['#4a5486', '#363e70', '#262c58'] },
 };
 
-// ---------- small maths ----------
+// How the world (not the sky) is coloured at each time of day.
+const GRADE: Record<Period, Grade> = {
+  dawn: { r: 1, g: 0.9, b: 0.86, ar: 14, ag: 6, ab: 4 },
+  day: { r: 1, g: 1, b: 1, ar: 0, ag: 0, ab: 0 },
+  dusk: { r: 0.95, g: 0.74, b: 0.8, ar: 16, ag: 0, ab: 12 },
+  night: { r: 0.34, g: 0.42, b: 0.66, ar: 4, ag: 6, ab: 18 },
+};
+const HILL_LIGHT: Record<Period, number> = { dawn: -0.8, day: -0.35, dusk: 0.8, night: 0.4 };
 
-function mulberry32(seed: number) {
-  return () => {
-    seed = (seed + 0x6d2b79f5) | 0;
-    let t = Math.imul(seed ^ (seed >>> 15), 1 | seed);
-    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
-    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
-  };
-}
-
-export function hashStr(s: string): number {
-  let h = 2166136261;
-  for (let i = 0; i < s.length; i++) h = Math.imul(h ^ s.charCodeAt(i), 16777619);
-  return h >>> 0;
-}
-
-function h2(a: number, b: number): number {
-  let h = (Math.imul(a | 0, 374761393) + Math.imul(b | 0, 668265263)) | 0;
-  h = Math.imul(h ^ (h >>> 13), 1274126177);
-  return ((h ^ (h >>> 16)) >>> 0) / 4294967296;
-}
-
-function noise1(x: number, seed: number): number {
-  const i = Math.floor(x), f = x - i, u = f * f * (3 - 2 * f);
-  return h2(i, seed) * (1 - u) + h2(i + 1, seed) * u;
-}
+const GREEN = ['#0c2216', '#174026', '#215a2e', '#2f7436', '#43903c', '#64ac46', '#8cc652', '#bce06c'];
+const STEM = ['#1f4a22', '#2e6a2c', '#46893a', '#64a845', '#8cc457', '#b4dc70'];
+const SPARKS = ['#fff6c8', '#ffd76a', '#aae654', '#ffffff'].map(hex);
 
 const rand = (a: number, b: number) => a + Math.random() * (b - a);
-const clamp = (v: number, a: number, b: number) => Math.min(b, Math.max(a, v));
-
-function mix(a: string, b: string, t: number): string {
-  const p = (s: string, i: number) => parseInt(s.slice(1 + i * 2, 3 + i * 2), 16);
-  return `rgb(${[0, 1, 2].map((i) => Math.round(p(a, i) + (p(b, i) - p(a, i)) * t)).join(',')})`;
-}
-
-// ---------- the tree ----------
-
-interface Node {
-  parent: number;
-  off: number; // angle relative to parent
-  len: number;
-  r0: number;
-  r1: number;
-  depth: number;
-  at: number; // where along the parent it attaches
-  phase: number;
-  leaf: number; // leaf cluster radius (0 = none)
-  ls: number; // leaf seed
-}
-
-interface Tree {
-  nodes: Node[];
-  S: number; // rough height in world pixels
-}
-
-/** Same seed → same tree shape at every size, so it grows instead of reshuffling. */
-function buildTree(seed: number, g: number): Tree {
-  const rng = mulberry32(seed);
-  const L = g * MAXD;
-  const S = 5 + 150 * Math.pow(g, 1.15);
-  const nodes: Node[] = [];
-  const leafFrom = Math.max(1, Math.ceil(L) - 2);
-  const leafBase = clamp(1.2 + S * 0.04, 1.6, 7);
-
-  const rec = (parent: number, depth: number, len: number, r: number, abs: number, parentAbs: number, at: number) => {
-    const jit = rng(), phase = rng() * TAU, kids = depth === 0 ? 3 : rng() < 0.4 ? 3 : 2, ls = (rng() * 1e9) | 0;
-    const f = depth === 0 ? 1 : clamp(L - depth + 1, 0, 1);
-    let idx = -2;
-    if (parent !== -2 && f > 0.03) {
-      const hasLeaf = depth >= leafFrom || (depth === 0 && g < 0.1);
-      const rr = r * Math.max(f, 0.45);
-      idx = nodes.length;
-      nodes.push({
-        parent, off: abs - parentAbs, len: len * f, r0: rr, r1: rr * 0.7, depth, at, phase, ls,
-        leaf: hasLeaf ? Math.max(1.3, leafBase * (0.75 + jit * 0.5) * f) : 0,
-      });
-    }
-    if (depth >= MAXD) return;
-    for (let k = 0; k < kids; k++) {
-      const a = rng(), b = rng(), c = rng();
-      const middle = kids === 3 && k === 2;
-      let cabs = abs + (middle ? (a - 0.5) * 0.4 : (k === 0 ? -1 : 1) * (0.5 + a * 0.6));
-      cabs += (-Math.PI / 2 - cabs) * 0.1; // reach for the light
-      rec(idx, depth + 1, len * (0.68 + c * 0.2), r * 0.68, cabs, abs, middle ? 1 : 0.45 + b * 0.55);
-    }
-  };
-  rec(-1, 0, S * 0.24, Math.max(0.7, S * 0.055), -Math.PI / 2 + (rng() - 0.5) * 0.16, 0, 0);
-  return { nodes, S };
-}
-
-// ---------- moving things ----------
 
 interface Walker {
   sprite: Sprite;
   kind: 'squirrel' | 'raccoon' | 'deer';
-  x: number;
+  x: number; // pixels from the middle
   dir: 1 | -1;
   walking: boolean;
   timer: number;
@@ -137,28 +65,64 @@ interface Flyer {
 }
 
 interface Particle {
-  kind: 'leaf' | 'spark';
-  x: number; y: number; vx: number; vy: number;
-  life: number; max: number; color: string; phase: number;
+  kind: 'leaf' | 'petal' | 'spark';
+  x: number; // pixels from the tree base
+  y: number;
+  vx: number;
+  vy: number;
+  life: number;
+  max: number;
+  ramp: number[];
+  phase: number;
+  spin: number;
 }
 
-const LEAF_FRONT = ['#1f6a3c', '#3f9a44', '#8fd14f'];
-const LEAF_BACK = ['#134a36', '#1f6a3c', '#3f9a44'];
-const BARK = { mid: '#7a4a34', dark: '#4a2a2a', light: '#a86a44' };
-const SPARKS = ['#fff6c8', '#ffd76a', '#aae654', '#ffffff'];
+interface ClumpAt {
+  x: number;
+  y: number;
+  r: number;
+  ls: number;
+  back: boolean;
+  squash: number;
+}
+
+interface Pal {
+  bark: number[];
+  barkOut: number;
+  root: number[];
+  leaves: number[];
+  leavesBack: number[];
+  sproutLeaves: number[];
+  stem: number[];
+  flower: number;
+  fruit: number;
+  fall: number[][];
+  grass: number[];
+  flowers: number[];
+  shadow: number;
+}
 
 export interface SceneState {
   points: number;
   seed: string;
+  species?: string;
   hour?: number; // override the clock (for previews)
+}
+
+export interface SceneOptions {
+  pixel: number; // CSS pixels per art pixel
+  animals: boolean;
+  tight: boolean; // frame the tree closely (for small previews)
 }
 
 export class Scene {
   private ctx: CanvasRenderingContext2D;
-  private world = document.createElement('canvas');
-  private wctx = this.world.getContext('2d')!;
-  private bg = document.createElement('canvas');
+  private pix = new Pix();
+  private sizeKey = '';
+  private bg: Uint32Array = new Uint32Array(0);
+  private skyTop: Int16Array = new Int16Array(0);
   private bgKey = '';
+  private clouds: PSprite[] = [];
   private raf = 0;
   private last = 0;
   private t = 0;
@@ -166,23 +130,30 @@ export class Scene {
   private viewH = 0;
   private seedStr = '';
   private seed = 0;
+  private speciesId = '';
   private cssW = 1;
   private cssH = 1;
   private walkers: Walker[] = [];
   private flyers: Flyer[] = [];
   private particles: Particle[] = [];
   private nextLeaf = 2;
+  private shakeUntil = 0;
+  private treeH = 10; // tree height in pixels, for sparkles
   private reduced = typeof matchMedia !== 'undefined' && matchMedia('(prefers-reduced-motion: reduce)').matches;
   private sprites = getSprites();
+  private palCache = new Map<string, Pal>();
+  private stemCache = new Map<string, number[]>();
+  private gradedSprites = new WeakMap<PSprite, Map<Period, PSprite>>();
+  private opts: SceneOptions;
   state: SceneState;
   onPeriod?: (p: Period) => void;
   private period: Period | null = null;
-  // last computed tip positions, for leaves / perches
-  private tips: { x: number; y: number; r: number }[] = [];
+  private clumps: ClumpAt[] = [];
 
-  constructor(private canvas: HTMLCanvasElement, state: SceneState) {
+  constructor(private canvas: HTMLCanvasElement, state: SceneState, opts: Partial<SceneOptions> = {}) {
     this.ctx = canvas.getContext('2d')!;
     this.state = state;
+    this.opts = { pixel: 2.6, animals: true, tight: false, ...opts };
     this.raf = requestAnimationFrame(this.tick);
   }
 
@@ -197,25 +168,30 @@ export class Scene {
 
   /** Sparkles rising around the tree after a note is saved. */
   burst(n = 30) {
-    const S = 5 + 150 * Math.pow(Math.max(0, this.g), 1.15);
+    const S = this.treeH;
     for (let i = 0; i < (this.reduced ? 6 : n); i++)
       this.particles.push({
-        kind: 'spark', x: rand(-S * 0.5 - 6, S * 0.5 + 6), y: -rand(0, S * 0.9 + 4),
-        vx: rand(-4, 4), vy: rand(-22, -6), life: 0, max: rand(0.9, 2), color: SPARKS[(Math.random() * 4) | 0], phase: rand(0, TAU),
+        kind: 'spark', x: rand(-S * 0.5 - 6, S * 0.5 + 6), y: -rand(0, S * 0.9 + 4), vx: rand(-5, 5), vy: rand(-26, -8),
+        life: 0, max: rand(0.9, 2), ramp: [SPARKS[(Math.random() * 4) | 0]], phase: rand(0, TAU), spin: 0,
       });
   }
 
-  /** Shake the branches: a flurry of leaves. */
+  /** Shake the branches: a gust and a flurry of leaves. */
   rustle() {
     if (this.reduced) return;
-    for (let i = 0; i < 14 && this.tips.length; i++) this.dropLeaf();
+    this.shakeUntil = this.t + 1.4;
+    for (let i = 0; i < 16 && this.clumps.length; i++) this.dropLeaf();
   }
 
   private dropLeaf() {
-    const tip = this.tips[(Math.random() * this.tips.length) | 0];
+    const c = this.clumps[(Math.random() * this.clumps.length) | 0];
+    const pal = this.palette(speciesOf(this.state.species), this.period ?? 'day');
+    const sp = speciesOf(this.state.species);
+    const W = this.pix.w, gy = this.pix.h - Math.max(5, Math.round(this.pix.h * 0.15));
     this.particles.push({
-      kind: 'leaf', x: tip.x + rand(-tip.r, tip.r), y: tip.y + rand(-tip.r, tip.r),
-      vx: rand(-2, 5), vy: rand(7, 13), life: 0, max: 40, color: LEAF_FRONT[(Math.random() * 3) | 0], phase: rand(0, TAU),
+      kind: sp.fallKind, x: c.x - Math.round(W / 2) + rand(-c.r, c.r), y: c.y - gy + rand(-c.r * 0.5, c.r * 0.5),
+      vx: rand(-3, 4), vy: rand(6, 12), life: 0, max: 60, ramp: pal.fall[(Math.random() * pal.fall.length) | 0],
+      phase: rand(0, TAU), spin: rand(1.5, 4) * (Math.random() < 0.5 ? -1 : 1),
     });
   }
 
@@ -234,8 +210,61 @@ export class Scene {
     this.frame(dt);
   };
 
+  private palette(sp: Species, period: Period): Pal {
+    const key = sp.id + period;
+    let pl = this.palCache.get(key);
+    if (pl) return pl;
+    const G = GRADE[period];
+    const bark = gradeAll(sp.bark, G);
+    const leaves = gradeAll(sp.leaves, G);
+    const backTint = grade(hex('#16304a'), G);
+    pl = {
+      bark,
+      barkOut: grade(hex(sp.barkOutline), G),
+      root: bark.map((c) => scalec(c, 0.72)),
+      leaves,
+      leavesBack: leaves.map((c, i) => (i === 0 ? c : scalec(mixc(c, backTint, 0.18), 0.8))),
+      sproutLeaves: sp.foliage === 'blossom' ? gradeAll(GREEN, G) : leaves,
+      stem: gradeAll(STEM, G),
+      flower: grade(hex(sp.flower ?? '#ffffff'), G),
+      fruit: sp.fruit ? grade(hex(sp.fruit), G) : 0,
+      fall: sp.fall.map((h) => {
+        const c = grade(hex(h), G);
+        return [scalec(c, 0.7), c, scalec(c, 1.18)];
+      }),
+      grass: gradeAll(['#24502c', '#2f6a32', '#3f8a3a', '#5aa843', '#7cc450', '#a6dc6a'], G),
+      flowers: gradeAll(['#ffe680', '#ff9ab0', '#ffffff', '#c0a8ff'], G),
+      shadow: grade(hex('#14261a'), G),
+    };
+    this.palCache.set(key, pl);
+    return pl;
+  }
+
+  /** Young trees have green stems that turn to bark. */
+  private woodRamp(sp: Species, period: Period, pal: Pal, g: number): number[] {
+    const k = Math.round(clamp((g - 0.04) / 0.26, 0, 1) * 8) / 8;
+    if (k >= 1) return pal.bark;
+    const key = sp.id + period + k;
+    let r = this.stemCache.get(key);
+    if (!r) {
+      r = pal.bark.map((c, i) => mixc(pal.stem[i], c, k));
+      this.stemCache.set(key, r);
+    }
+    return r;
+  }
+
+  private graded(s: PSprite, period: Period): PSprite {
+    let m = this.gradedSprites.get(s);
+    if (!m) this.gradedSprites.set(s, (m = new Map()));
+    let out = m.get(period);
+    if (!out) m.set(period, (out = gradeSprite(s, GRADE[period])));
+    return out;
+  }
+
   private frame(dt: number) {
     const t = this.t;
+    const ft = this.reduced ? 0 : t; // time for things that flutter
+    const sp = speciesOf(this.state.species);
     const target = growthValue(this.state.points);
     if (this.seedStr !== this.state.seed || this.g < 0) {
       this.seedStr = this.state.seed;
@@ -246,26 +275,43 @@ export class Scene {
       this.flyers = [];
       this.particles = [];
     }
+    if (sp.id !== this.speciesId) {
+      this.speciesId = sp.id;
+      this.particles = this.particles.filter((p) => p.kind === 'spark');
+    }
     // grow smoothly toward the real size
     this.g += (target - this.g) * Math.min(1, dt * 0.8);
     if (Math.abs(target - this.g) < 0.0004) this.g = target;
     const g = this.g;
     const stage = Math.floor(g * (STAGES.length - 1) + 1e-6);
-    const tree = buildTree(this.seed, g);
+    const tree = buildTree(sp, this.seed, g);
 
-    // camera: zoom out as the tree gets taller
-    const wantView = clamp(tree.S * 1.3 + 34, 46, 260);
-    if (!this.viewH) this.viewH = wantView;
-    this.viewH += (wantView - this.viewH) * Math.min(1, dt * 1.4);
-    const H = Math.round(this.viewH);
-    const W = Math.max(40, Math.round((H * this.cssW) / this.cssH));
-    if (this.canvas.width !== W || this.canvas.height !== H) {
-      this.canvas.width = this.world.width = W;
-      this.canvas.height = this.world.height = H;
+    // ----- the pixel grid: whole device pixels per art pixel -----
+    const dpr = window.devicePixelRatio || 1;
+    const step = Math.max(1, Math.round(this.opts.pixel * dpr));
+    const W = Math.max(24, Math.ceil((this.cssW * dpr) / step));
+    const H = Math.max(24, Math.ceil((this.cssH * dpr) / step));
+    const sizeKey = `${W}x${H}x${step}x${dpr}`;
+    if (sizeKey !== this.sizeKey) {
+      this.sizeKey = sizeKey;
+      this.pix.resize(W, H);
+      this.canvas.width = W;
+      this.canvas.height = H;
+      this.canvas.style.width = `${(W * step) / dpr}px`;
+      this.canvas.style.height = `${(H * step) / dpr}px`;
     }
-    const gy = H - Math.max(8, Math.round(H * 0.15));
+    const p = this.pix;
+    const gy = H - Math.max(5, Math.round(H * 0.15));
     const cx = Math.round(W / 2);
 
+    // ----- camera: zoom out as the tree gets taller -----
+    const wantView = this.opts.tight ? clamp(tree.S * 1.22 + 16, 40, 400) : clamp(tree.S * 1.3 + 34, 46, 260);
+    if (!this.viewH) this.viewH = wantView;
+    this.viewH += (wantView - this.viewH) * Math.min(1, dt * 1.4);
+    const z = H / this.viewH;
+    this.treeH = tree.S * z;
+
+    // ----- time of day -----
     const hour = this.hour();
     const period = periodForHour(hour);
     if (period !== this.period) {
@@ -273,80 +319,510 @@ export class Scene {
       this.onPeriod?.(period);
     }
     const sky = SKY[period];
-    const c = this.ctx;
+    const pal = this.palette(sp, period);
 
-    // ----- sky -----
-    const bands = 9;
-    for (let i = 0; i < bands; i++) {
-      const k = i / (bands - 1);
-      c.fillStyle = k < 0.5 ? mix(sky.stops[0], sky.stops[1], k * 2) : mix(sky.stops[1], sky.stops[2], (k - 0.5) * 2);
-      c.fillRect(0, Math.floor((i * gy) / bands), W, Math.ceil(gy / bands) + 1);
+    const bgKey = `${W}x${H}:${period}`;
+    if (bgKey !== this.bgKey) {
+      this.bgKey = bgKey;
+      const b = buildBackdrop(W, H, gy, sky.stops, GRADE[period], HILL_LIGHT[period]);
+      this.bg = b.px;
+      this.skyTop = b.skyTop;
+      const [cl, cm, cd] = sky.cloud.map(hex);
+      this.clouds = [0, 1, 2, 3, 4].map((i) => {
+        const cw = Math.round(H * (0.14 + h2(i, 34) * 0.16));
+        return makeCloud(cw, Math.max(5, Math.round(cw * 0.36)), i * 17 + 3, cl, cm, cd);
+      });
     }
-    if (period === 'night' || period === 'dusk') {
-      for (let i = 0; i < 70; i++) {
-        const sx = Math.floor(h2(i, 1) * W), sy = Math.floor(h2(i, 2) * gy * 0.8);
-        const a = (period === 'night' ? 1 : 0.4) * (0.35 + 0.65 * (0.5 + 0.5 * Math.sin(t * 1.6 + i)));
-        c.globalAlpha = a;
-        c.fillStyle = '#fffbe0';
-        c.fillRect(sx, sy, 1, 1);
-      }
-      c.globalAlpha = 1;
-    }
-    // sun or moon on its arc
+    p.d.set(this.bg);
+
+    // the sun or moon on its arc decides where the light comes from
     const isNight = period === 'night';
     const f = isNight ? ((hour + 24 - 19.5) % 24) / 9.5 : (hour - 5) / 14.5;
-    const bx = Math.round(W * (0.12 + 0.76 * f)), by = Math.round(gy * 0.92 - Math.sin(clamp(f, 0, 1) * Math.PI) * gy * 0.75);
-    const br = Math.max(2, Math.round(H * 0.045));
-    if (isNight) {
-      disc(c, bx, by, br, '#f0ecd0');
-      disc(c, bx + Math.ceil(br * 0.45), by - Math.ceil(br * 0.25), br * 0.8, sky.stops[0]); // crescent
+    const bx = Math.round(W * (0.12 + 0.76 * f));
+    const by = Math.round(gy * 0.92 - Math.sin(clamp(f, 0, 1) * Math.PI) * gy * 0.75);
+    const lxq = Math.round(clamp((bx - cx) / (W * 0.42), -1, 1) * 2) / 2;
+    const L = norm3(lxq * 0.85, -0.72, 0.55);
+    const lxs = lxq < -0.3 ? -1 : lxq > 0.3 ? 1 : 0;
+    this.drawSky(period, t, bx, by, gy);
+
+    // ----- wind: a steady breeze with gusts that sweep across from the left -----
+    const windOn = this.reduced ? 0 : 1;
+    const shake = t < this.shakeUntil ? (this.shakeUntil - t) / 1.4 : 0;
+    const gust = (x: number) => {
+      if (!windOn) return 0;
+      const n = noise1((t - x / 70) * 0.23, 7);
+      const k = Math.max(0, (n - 0.3) / 0.7);
+      return Math.max(0.15 + 0.85 * k * Math.sqrt(k), shake);
+    };
+
+    // ----- where every branch is this frame -----
+    const n = tree.nodes.length;
+    const x0 = new Float32Array(n), y0 = new Float32Array(n), x1 = new Float32Array(n), y1 = new Float32Array(n), ang = new Float32Array(n);
+    for (let i = 0; i < n; i++) {
+      const nd = tree.nodes[i], pi = nd.parent;
+      const gs = gust(pi >= 0 ? cx + x1[pi] * z : cx);
+      const sway = windOn * (Math.sin(t * (1.1 + nd.flex * 0.12) + nd.phase) * 0.009 * (nd.flex + 0.4) * (0.6 + gs) + gs * 0.008 * nd.flex);
+      ang[i] = (pi >= 0 ? ang[pi] : 0) + nd.off + sway;
+      x0[i] = pi >= 0 ? x0[pi] + (x1[pi] - x0[pi]) * nd.at : 0;
+      y0[i] = pi >= 0 ? y0[pi] + (y1[pi] - y0[pi]) * nd.at : 0;
+      x1[i] = x0[i] + Math.cos(ang[i]) * nd.len;
+      y1[i] = y0[i] + Math.sin(ang[i]) * nd.len;
+    }
+    const pine = sp.foliage === 'pine', willow = sp.foliage === 'willow';
+    const clumps: ClumpAt[] = [];
+    for (let i = 0; i < n; i++) {
+      const nd = tree.nodes[i];
+      if (!nd.leaf || tree.sprout) continue;
+      const R = Math.max(1, Math.round(nd.leaf * z * (willow ? 0.7 : 1)));
+      clumps.push({
+        x: Math.round(cx + x1[i] * z), y: Math.round(gy + y1[i] * z - R * 0.2), r: R, ls: nd.ls,
+        back: pine ? nd.ls % 4 === 0 : nd.ls % 2 === 0, squash: nd.squash,
+      });
+    }
+    this.clumps = clumps;
+
+    // ----- underground and on the ground -----
+    if (g > 0.05) this.drawRoots(tree, pal, cx, gy, z, clamp(0.4 + g * 4, 0.4, 1), L);
+    if (clumps.length) {
+      let a = 1e9, b = -1e9;
+      for (const c of clumps) {
+        a = Math.min(a, c.x - c.r);
+        b = Math.max(b, c.x + c.r);
+      }
+      const mid = (a + b) / 2, half = (b - a) / 2 + 2;
+      for (let y = gy - 3; y <= gy; y++)
+        for (let x = Math.floor(mid - half); x <= Math.ceil(mid + half); x++) {
+          const u = (x - mid) / half;
+          p.blend(x, y, pal.shadow, (1 - u * u) * 0.3);
+        }
+    }
+
+    const animals = this.opts.animals;
+    if (animals) this.moveAnimals(stage, W, period, dt);
+    const drawWalker = (a: Walker) => {
+      const fr = a.walking ? Math.floor(t * 6) % 2 : a.kind === 'deer' && Math.sin(t * 0.5 + a.x) > 0 ? 2 : 0;
+      const s = this.graded(a.sprite.frames[fr], period);
+      blit(p, s, Math.round(cx + a.x - s.w / 2), gy - s.h + 2, a.dir === -1);
+    };
+    for (const a of this.walkers) if (a.kind !== 'squirrel') drawWalker(a);
+
+    // ----- the tree -----
+    const leafLen = pine ? clamp(1.2 + z, 2, 4.5) : clamp(1.4 + z * 1.25, 2.4, 6.5);
+    const leafWid = pine ? 0.6 : sp.foliage === 'blossom' ? leafLen * 0.7 : leafLen * 0.5;
+    const style: ClumpStyle = pine ? 'pine' : sp.foliage === 'blossom' ? 'blossom' : 'round';
+    const keyBase = `${sp.id}|${period}|${lxq}`;
+    const wood = this.woodRamp(sp, period, pal, g);
+    const rf = clamp(0.4 + g * 4, 0.4, 1) * z; // seedlings get thinner stems
+    const limbs = (pass: 0 | 1) => {
+      const r0 = (tree.nodes[0]?.r0 ?? 0) * rf;
+      if (r0 > 2) {
+        // the trunk flares out where it meets the ground
+        for (const s of [-1, 1]) limb(p, cx + s * r0 * 1.7, gy + 1, cx, gy - r0 * 1.3, r0 * 0.45, r0 * 0.75, wood, pal.barkOut, L, 5 + s, 0, false, pass);
+      }
+      for (let i = 0; i < n; i++) {
+        const nd = tree.nodes[i];
+        if (nd.len < 0.01) continue;
+        limb(
+          p, cx + x0[i] * z, gy + y0[i] * z, cx + x1[i] * z, gy + y1[i] * z, nd.r0 * rf, nd.r1 * rf,
+          wood, pal.barkOut, L, nd.ls & 1023, i * 13.7, !!sp.birch && g > 0.3, pass,
+        );
+      }
+    };
+
+    if (this.state.points <= 0 && g < 0.002) {
+      this.drawSeed(cx, gy, z, L, period);
+    } else if (tree.sprout) {
+      limbs(1);
+      this.drawSprout(cx + x1[0] * z, gy + y1[0] * z, cx + x0[0] * z, gy + y0[0] * z, tree, g, z, pal, lxs, ft, gust);
     } else {
-      c.globalAlpha = 0.25;
-      disc(c, bx, by, br + 2, '#fff8c0');
-      c.globalAlpha = 1;
-      disc(c, bx, by, br, period === 'day' ? '#fff6b0' : '#ffd890');
-    }
-    // clouds
-    for (let i = 0; i < 5; i++) {
-      const sp = 1.2 + h2(i, 31) * 2;
-      const span = W + 60;
-      const x = ((h2(i, 32) * span + t * sp) % span) - 30;
-      const y = Math.round(gy * (0.1 + h2(i, 33) * 0.4));
-      const s = 2 + h2(i, 34) * 3;
-      c.globalAlpha = period === 'night' ? 0.6 : 0.9;
-      disc(c, x, y, s, sky.cloud);
-      disc(c, x + s * 1.2, y - s * 0.4, s * 1.2, sky.cloud);
-      disc(c, x + s * 2.6, y, s * 0.9, sky.cloud);
-      c.fillStyle = sky.cloud;
-      c.fillRect(Math.round(x - s), y, Math.round(s * 4.4), Math.ceil(s));
-    }
-    c.globalAlpha = 1;
-
-    // ----- world layer (gets the time-of-day tint) -----
-    const w = this.wctx;
-    w.globalCompositeOperation = 'source-over';
-    w.clearRect(0, 0, W, H);
-    this.drawBackdrop(W, H, gy, cx);
-    w.drawImage(this.bg, 0, 0);
-
-    // grass tufts and flowers
-    for (let sx = 0; sx < W; sx++) {
-      const wx = sx - cx;
-      const r = h2(wx, 77);
-      if (r > 0.24) continue;
-      const hgt = 1 + Math.floor(h2(wx, 5) * 3);
-      const sway = this.reduced ? 0 : Math.round(Math.sin(t * 1.6 + wx * 0.35) * 0.6);
-      w.fillStyle = r < 0.12 ? '#6cc24a' : '#3f8f3a';
-      w.fillRect(sx, gy - hgt + 1, 1, hgt - 1);
-      w.fillRect(sx + sway, gy - hgt, 1, 1);
-      if (r < 0.03) {
-        w.fillStyle = ['#ffe680', '#ff9ab0', '#ffffff'][Math.floor(h2(wx, 9) * 3)];
-        w.fillRect(sx + sway, gy - hgt - 1, 1, 1);
+      for (const c of clumps) if (c.back) this.drawClump(c, true, pal, keyBase, style, L, lxs, leafLen, leafWid, ft, gust);
+      if (willow) for (const c of clumps) if (c.back) this.drawStrands(c, pal.leavesBack, L, lxs, leafLen, ft, gust, gy, cx);
+      limbs(0);
+      limbs(1);
+      if (animals && stage >= 6) {
+        const m = this.sprites.monkey;
+        const spots: number[] = [];
+        for (let i = 0; i < n; i++) if (tree.nodes[i].depth >= 1 && tree.nodes[i].depth <= 2 && tree.nodes[i].len * z > 14) spots.push(i);
+        for (let k = 0; k < Math.min(3, spots.length); k++) {
+          const i = spots[(k * 3 + (this.seed % 5)) % spots.length];
+          const s = this.graded(m.frames[Math.sin(t * 0.9 + k * 2) > 0.6 ? 1 : 0], period);
+          const mx = cx + ((x0[i] + x1[i]) / 2) * z, my = gy + ((y0[i] + y1[i]) / 2) * z - tree.nodes[i].r0 * z;
+          blit(p, s, Math.round(mx - s.w / 2), Math.round(my - s.h + 3), k % 2 === 1);
+        }
+      }
+      for (const c of clumps) {
+        if (c.back) continue;
+        this.drawClump(c, false, pal, keyBase, style, L, lxs, leafLen, leafWid, ft, gust);
+        if (pal.fruit && stage >= 4 && c.ls % 3 === 0 && c.r >= 3) {
+          const fx = c.x + Math.round((h2(c.ls, 1) - 0.5) * c.r);
+          const fy = c.y + Math.round(c.r * c.squash * (0.1 + h2(c.ls, 2) * 0.4) + Math.sin(ft * 1.6 + c.ls) * 0.5 * gust(c.x));
+          this.drawFruit(fx, fy, pal.fruit, c.r >= 8);
+        }
+      }
+      if (willow) for (const c of clumps) if (!c.back) this.drawStrands(c, pal.leaves, L, lxs, leafLen, ft, gust, gy, cx);
+      // birds resting on top of the leaves
+      if (animals && stage >= 3) {
+        const front = clumps.filter((c) => !c.back);
+        for (let k = 0; k < Math.min(3, stage - 2) && front.length; k++) {
+          const c = front[(k * 37 + (this.seed % 97)) % front.length];
+          const s = this.graded(this.sprites.birds[k % 3].frames[2], period);
+          blit(p, s, Math.round(c.x - s.w / 2), Math.round(c.y - c.r * c.squash - s.h + 4), Math.sin(t * 0.3 + k * 1.7) > 0);
+        }
       }
     }
 
-    // animals that have moved in
-    this.syncAnimals(stage, W, period);
+    for (const a of this.walkers) if (a.kind === 'squirrel') drawWalker(a);
+    this.drawGrass(W, gy, cx, t, windOn, gust, pal);
+
+    // birds crossing the sky
+    for (const b of this.flyers) {
+      b.x += b.dir * b.speed * dt;
+      if (b.x > W + 24 || b.x < -24) {
+        b.dir = Math.random() < 0.5 ? 1 : -1;
+        b.x = b.dir === 1 ? -16 - rand(0, 90) : W + 16 + rand(0, 90);
+        b.y = rand(0.08, 0.55);
+      }
+      const s = this.graded(b.sprite.frames[Math.floor(t * 7 + b.phase) % 2], period);
+      blit(p, s, Math.round(b.x), Math.round(gy * b.y + Math.sin(t * 2 + b.phase) * 2), b.dir === -1);
+    }
+
+    // butterflies
+    if (animals && stage >= 1 && (period === 'day' || period === 'dawn') && !this.reduced) {
+      for (let i = 0; i < 3; i++) {
+        const fx = Math.round(cx + Math.sin(t * 0.35 + i * 2.1) * (this.treeH * 0.5 + 18) + Math.sin(t * 1.3 + i) * 4);
+        const fy = Math.round(gy - 6 - (0.5 + 0.5 * Math.sin(t * 0.5 + i * 1.3)) * Math.min(40, this.treeH * 0.4 + 8) + Math.sin(t * 3 + i) * 2);
+        const col = pal.flowers[(i + 1) % 4], dark = scalec(col, 0.55);
+        p.put(fx, fy, dark);
+        if (Math.floor(t * 9 + i) % 2) {
+          p.put(fx - 1, fy - 1, col);
+          p.put(fx + 1, fy - 1, col);
+          p.put(fx - 1, fy, col);
+          p.put(fx + 1, fy, col);
+        } else {
+          p.put(fx - 1, fy, col);
+          p.put(fx + 1, fy, col);
+        }
+      }
+    }
+
+    // ----- things drifting down -----
+    if (!this.reduced && (stage >= 2 || (sp.fallKind === 'petal' && stage >= 1)) && clumps.length && t > this.nextLeaf) {
+      this.dropLeaf();
+      const gs = gust(cx);
+      this.nextLeaf = t + rand(1.2, 4) / ((stage >= 5 ? 2 : 1) * sp.fallRate * (0.6 + gs * 1.6));
+    }
+    for (const q of this.particles) {
+      q.life += dt;
+      if (q.kind === 'spark') {
+        q.x += q.vx * dt;
+        q.y += q.vy * dt;
+        continue;
+      }
+      if (q.y < 0) {
+        const gs = gust(cx + q.x);
+        const flutter = q.kind === 'petal' ? 9 : 5;
+        q.x += (q.vx + gs * 14 + Math.sin(t * 3 + q.phase) * flutter) * dt;
+        q.y += (q.vy * (q.kind === 'petal' ? 0.7 : 1) + Math.cos(t * 2.3 + q.phase) * 2) * dt;
+        if (q.y >= 0) {
+          q.y = 0;
+          q.max = q.life + 3;
+        }
+      }
+      const fade = clamp((q.max - q.life) / 1.2, 0, 1);
+      const qx = Math.round(cx + q.x), qy = Math.round(gy + q.y);
+      if (q.kind === 'petal') {
+        if (fade < 1 && bayer(qx, qy) >= fade) continue;
+        const wide = q.y >= 0 || Math.sin(q.life * 7 + q.phase) > -0.2;
+        p.put(qx, qy, q.ramp[1]);
+        if (wide) p.put(qx + 1, qy, q.ramp[2]);
+      } else {
+        const a32 = q.y >= 0 ? 0 : Math.round(((q.phase + q.life * q.spin) / TAU) * 32);
+        stamp(p, leafMask(Math.max(2, leafLen * 0.8), Math.max(1, leafLen * 0.4), a32, lxs), qx, qy, q.ramp, 1, 0, fade);
+      }
+    }
+    this.particles = this.particles.filter((q) => q.life < q.max && q.x > -W && q.x < W);
+
+    // ----- lights on top (not tinted by the time of day) -----
+    if ((period === 'night' || period === 'dusk') && !this.reduced) {
+      const fly = hex('#e8ff8a');
+      for (let i = 0; i < (period === 'night' ? 12 : 5); i++) {
+        const fx = Math.round(cx + Math.sin(t * 0.2 + i * 1.9) * (W * 0.32) + Math.sin(t * 0.7 + i) * 6);
+        const fy = Math.round(gy - 4 - (0.5 + 0.5 * Math.sin(t * 0.3 + i * 2.3)) * Math.min(gy * 0.5, 50));
+        const a = 0.5 + 0.5 * Math.sin(t * 2.2 + i * 1.3);
+        this.glow(fx, fy, fly, a);
+      }
+    }
+    for (const q of this.particles) {
+      if (q.kind !== 'spark') continue;
+      const a = clamp((q.max - q.life) / 0.5, 0, 1) * (0.6 + 0.4 * Math.sin(t * 20 + q.phase));
+      const sx = Math.round(cx + q.x), sy = Math.round(gy + q.y);
+      p.add(sx, sy, q.ramp[0], a);
+      if (q.phase > 4) {
+        p.add(sx - 1, sy, q.ramp[0], a * 0.6);
+        p.add(sx + 1, sy, q.ramp[0], a * 0.6);
+        p.add(sx, sy - 1, q.ramp[0], a * 0.6);
+        p.add(sx, sy + 1, q.ramp[0], a * 0.6);
+      }
+    }
+
+    this.ctx.putImageData(p.img, 0, 0);
+  }
+
+  // ---------- sky ----------
+
+  private drawSky(period: Period, t: number, bx: number, by: number, gy: number) {
+    const p = this.pix, W = p.w, H = p.h, mask = this.skyTop;
+    if (period === 'night' || period === 'dusk') {
+      const star = hex('#fffbe0');
+      for (let i = 0; i < 110; i++) {
+        const sx = Math.floor(h2(i, 1) * W), sy = Math.floor(h2(i, 2) * gy * 0.85);
+        if (sy >= mask[sx]) continue;
+        const a = (period === 'night' ? 1 : 0.4) * (0.35 + 0.65 * (0.5 + 0.5 * Math.sin(t * 1.6 + i)));
+        p.blend(sx, sy, star, a);
+        if (i % 11 === 0) {
+          p.blend(sx - 1, sy, star, a * 0.45);
+          p.blend(sx + 1, sy, star, a * 0.45);
+          p.blend(sx, sy - 1, star, a * 0.45);
+          p.blend(sx, sy + 1, star, a * 0.45);
+        }
+      }
+    }
+    const br = Math.max(3, Math.round(H * 0.035));
+    const isNight = period === 'night';
+    const glowCol = hex(isNight ? '#8a96d0' : period === 'day' ? '#fff4b0' : '#ffb070');
+    const gr = br * (isNight ? 2.6 : 3.4);
+    for (let dy = -Math.ceil(gr); dy <= Math.ceil(gr); dy++)
+      for (let dx = -Math.ceil(gr); dx <= Math.ceil(gr); dx++) {
+        const x = bx + dx, y = by + dy;
+        if (x < 0 || x >= W || y < 0 || y >= mask[x]) continue;
+        const d = Math.hypot(dx, dy);
+        if (d > gr) continue;
+        if (d <= br) {
+          if (isNight) {
+            const sx = dx - br * 0.45, sy = dy + br * 0.25;
+            if (sx * sx + sy * sy < br * br * 0.72) continue; // the crescent's shadow
+            p.put(x, y, h2(dx + 50, dy + 50) < 0.1 ? hex('#c8c2a8') : d > br - 1 ? hex('#fff8dc') : hex('#f0ead0'));
+          } else {
+            p.put(x, y, d > br - 1 ? hex(period === 'day' ? '#fff0a0' : '#ffc070') : hex(period === 'day' ? '#fffbe0' : '#ffe0a0'));
+          }
+          continue;
+        }
+        const ring = Math.floor((1 - d / gr) * (1 - d / gr) * 3 + bayer(x, y));
+        if (ring > 0) p.add(x, y, glowCol, ring * (isNight ? 0.05 : 0.09));
+      }
+    for (let i = 0; i < this.clouds.length; i++) {
+      const c = this.clouds[i];
+      const speed = 1.5 + h2(i, 31) * 3;
+      const span = W + c.w * 2;
+      const x = ((h2(i, 32) * span + t * speed) % span) - c.w;
+      blit(p, c, Math.round(x), Math.round(gy * (0.05 + h2(i, 33) * 0.38)), false, isNight ? 0.7 : 0.95, mask);
+    }
+  }
+
+  // ---------- the tree's parts ----------
+
+  private drawRoots(tree: Tree, pal: Pal, cx: number, gy: number, z: number, thin: number, L: Light) {
+    const S = tree.S, r0 = (tree.nodes[0]?.r0 ?? 1) * thin;
+    const rng = mulberry32(this.seed ^ 0x5bd1e995);
+    const roots: number[][] = [];
+    const main = 3 + Math.floor(rng() * 2);
+    for (let k = 0; k < main; k++) {
+      const a = Math.PI / 2 + (k / (main - 1) - 0.5) * 2.3 + (rng() - 0.5) * 0.3;
+      const len = S * 0.2 * (0.7 + rng() * 0.6);
+      const ax = (rng() - 0.5) * r0, bx = ax + Math.cos(a) * len, by = Math.sin(a) * len;
+      roots.push([ax, -r0 * 0.3, bx, by, r0 * 0.6, r0 * 0.12]);
+      for (let j = 0; j < 2; j++) {
+        const tt = 0.4 + j * 0.3, sx = ax + (bx - ax) * tt, sy = by * tt;
+        const a2 = a + (j ? 1 : -1) * (0.5 + rng() * 0.5), l2 = len * 0.45;
+        roots.push([sx, sy, sx + Math.cos(a2) * l2, sy + Math.sin(a2) * l2, r0 * 0.25, 0.3]);
+      }
+    }
+    const p = this.pix;
+    for (const pass of [0, 1] as const)
+      for (const [ax, ay, bx, by, ra, rb] of roots)
+        limb(p, cx + ax * z, gy + ay * z, cx + bx * z, gy + by * z, ra * z, rb * z, pal.root, pal.barkOut, L, 77, ax * 9, false, pass, gy + 2, p.h);
+  }
+
+  private drawClump(
+    c: ClumpAt, back: boolean, pal: Pal, keyBase: string, style: ClumpStyle, L: Light, lxs: number,
+    leafLen: number, leafWid: number, t: number, gust: (x: number) => number,
+  ) {
+    const p = this.pix;
+    const ramp = back ? pal.leavesBack : pal.leaves;
+    const variant = c.ls % 6;
+    const spr = clumpSprite(`${keyBase}|${back ? 'b' : 'f'}|${style}`, c.r, variant, c.squash, style, ramp, pal.flower, L);
+    blit(p, spr, c.x - spr.ox, c.y - spr.oy);
+
+    // loose leaves round the edge flutter and flip over in the wind
+    const list = edgeLeaves(variant);
+    const K = Math.min(EDGE_MAX, Math.max(3, Math.round(c.r * (back ? 1 : 1.8))));
+    const gs = gust(c.x);
+    const amp = 0.25 + gs * 0.95;
+    const n = ramp.length;
+    for (let k = 0; k < K; k++) {
+      const e = list[k];
+      const fl = Math.sin(t * e.fr + e.ph);
+      const ex = c.x + Math.round(Math.cos(e.a) * e.rr * c.r + fl * amp + gs * 0.7);
+      const ey = c.y + Math.round(Math.sin(e.a) * e.rr * c.r * c.squash + Math.cos(t * e.fr * 0.8 + e.ph) * amp * 0.45);
+      const diff = Math.cos(e.a) * L.x + Math.sin(e.a) * L.y + 0.5 * L.z;
+      let idx = 1 + Math.round(clamp(0.12 + 0.88 * Math.max(0, diff) + e.j, 0, 1) * (n - 2));
+      if (fl > 0.93 - gs * 0.22) idx = n - 1;
+      const a32 = Math.round(((e.a + fl * 0.4 * amp) / TAU) * 32);
+      stamp(p, leafMask(leafLen * e.s, leafWid * e.s, a32, lxs), ex, ey, ramp, idx);
+    }
+    // glints: leaves turning over across the surface
+    for (let k = 0; k < c.r >> 1; k++) {
+      const e = list[(k * 7 + 3) % EDGE_MAX];
+      if (Math.sin(t * e.fr * 1.3 + e.ph * 2.1) < 0.95 - gs * 0.15) continue;
+      const gx = c.x + Math.round(Math.cos(e.a + 1.3) * e.rr * 0.55 * c.r);
+      const gy = c.y + Math.round(Math.sin(e.a + 1.3) * e.rr * 0.55 * c.r * c.squash);
+      p.put(gx, gy, ramp[n - 1]);
+      if (leafLen > 3) p.put(gx + 1, gy, ramp[n - 2]);
+    }
+  }
+
+  /** Willow: strands of leaves hanging from each tip, swinging like pendulums. */
+  private drawStrands(
+    c: ClumpAt, ramp: number[], L: Light, lxs: number, leafLen: number, t: number, gust: (x: number) => number, gy: number, cx: number,
+  ) {
+    const p = this.pix, n = ramp.length;
+    const cnt = Math.min(6, 2 + (c.r >> 1));
+    for (let k = 0; k < cnt; k++) {
+      const hh = h2(c.ls, k), hv = h2(c.ls, k + 50), hl = h2(c.ls, k + 99);
+      const sx = c.x + (hh - 0.5) * c.r * 1.6, sy = c.y + (hv - 0.3) * c.r * 0.6;
+      const len = Math.min(c.r * (2.4 + hl * 2.6), gy - 3 - sy);
+      if (len < 2) continue;
+      const ph = hh * TAU;
+      const gs = gust(sx);
+      const swing = gs * 3.4 + Math.sin(t * 1.3 + ph) * (0.5 + gs);
+      const side = clamp((sx - cx) / 40, -1, 1);
+      const step = Math.max(1.1, leafLen * 0.5);
+      for (let s = 0; s <= len; s += step) {
+        const f = s / len;
+        const x = Math.round(sx + swing * Math.pow(f, 1.6) + Math.sin(s * 0.45 + ph + t * 2) * 0.35 * f);
+        const y = Math.round(sy + s);
+        const v = 0.72 - f * 0.35 + side * L.x * 0.3 + (h2(k * 31 + c.ls, Math.round(s)) - 0.5) * 0.24;
+        let idx = 1 + Math.round(clamp(v, 0, 1) * (n - 2));
+        const fl = Math.sin(t * 3.1 + s * 0.9 + ph);
+        if (fl > 0.94 - gs * 0.2) idx = n - 1;
+        const a32 = 8 + Math.round(swing * 0.25 * f + fl * 1.2); // 8/32 of a turn = pointing down
+        stamp(p, leafMask(leafLen, leafLen * 0.42, a32, lxs), x, y, ramp, idx);
+      }
+    }
+  }
+
+  /** A seedling: a green stem and its first few leaves. */
+  private drawSprout(
+    tx: number, ty: number, bx: number, by: number, tree: Tree, g: number, z: number, pal: Pal, lxs: number, t: number,
+    gust: (x: number) => number,
+  ) {
+    const p = this.pix;
+    const nd = tree.nodes[0];
+    const count = 2 + Math.floor(clamp(g / 0.1, 0, 0.99) * 3);
+    const len = clamp(nd.leaf * z * 1.5, 3, 16);
+    const gs = gust(tx);
+    const ramp = pal.sproutLeaves;
+    for (let k = 0; k < count; k++) {
+      const pair = k >> 1, side = k % 2 ? 1 : -1;
+      const top = k === 4 || (count === 3 && k === 2);
+      // the first pair sits lower on the stem; newer leaves come out at the top
+      const at = pair === 0 && count > 2 ? 0.7 : 1;
+      const ax = bx + (tx - bx) * at, ay = by + (ty - by) * at;
+      let a = top ? -Math.PI / 2 : -Math.PI / 2 + side * (1.05 - pair * 0.3);
+      a += Math.sin(t * 2.2 + k * 1.7) * 0.12 * (0.5 + gs) + gs * 0.15;
+      const l = top ? len * 0.7 : len * (1 - pair * 0.15);
+      const m = leafMask(l, l * 0.5, Math.round((a / TAU) * 32), lxs);
+      const lx = Math.round(ax + Math.cos(a) * l * 0.45), ly = Math.round(ay + Math.sin(a) * l * 0.45);
+      for (let i = 0; i < m.length; i += 3)
+        for (const [ox, oy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) p.put(lx + m[i] + ox, ly + m[i + 1] + oy, ramp[0]);
+      stamp(p, m, lx, ly, ramp, 5, 2);
+    }
+  }
+
+  private drawSeed(cx: number, gy: number, z: number, L: Light, period: Period) {
+    const p = this.pix, G = GRADE[period];
+    const mound = gradeAll(['#3f2a1c', '#5a3b28', '#74503a'], G);
+    const rx = 2.8 * z, ry = 1 * z;
+    for (let dy = -Math.ceil(ry); dy <= 0; dy++)
+      for (let dx = -Math.ceil(rx); dx <= Math.ceil(rx); dx++) {
+        const ux = dx / rx, uy = dy / ry;
+        if (ux * ux + uy * uy > 1) continue;
+        const v = -ux * L.x * 0.6 - uy * 0.6 + (bayer(cx + dx, gy + dy) - 0.5) * 0.5;
+        p.put(cx + dx, gy + dy, mound[v > 0.45 ? 2 : v > -0.1 ? 1 : 0]);
+      }
+    const seed = gradeAll(['#2a140a', '#6a3a1e', '#9a5a2e', '#c4804a', '#e8a868'], G);
+    const sx = cx, sy = gy - 0.9 * z, srx = 1.2 * z, sry = 0.8 * z;
+    for (let dy = -Math.ceil(sry) - 1; dy <= Math.ceil(sry) + 1; dy++)
+      for (let dx = -Math.ceil(srx) - 1; dx <= Math.ceil(srx) + 1; dx++) {
+        const ux = dx / srx, uy = dy / sry, d2 = ux * ux + uy * uy;
+        const x = Math.round(sx + dx), y = Math.round(sy + dy);
+        if (d2 > 1) {
+          if (d2 < 1 + 2.2 / Math.min(srx, sry)) p.put(x, y, seed[0]);
+          continue;
+        }
+        const v = 0.15 + 0.85 * Math.max(0, ux * L.x + uy * L.y + Math.sqrt(1 - d2) * L.z);
+        p.put(x, y, seed[1 + Math.min(3, Math.round(v * 3 + (bayer(x, y) - 0.5) * 0.5))]);
+      }
+  }
+
+  private drawFruit(x: number, y: number, col: number, big: boolean) {
+    const p = this.pix, dark = scalec(col, 0.6), lite = scalec(col, 1.4), stem = hex('#4a2e1a');
+    const rows = big ? ['.ss.', 'cccc', 'clcc', 'cccd', '.dd.'] : ['.s.', 'ccc', 'lcc', '.d.'];
+    rows.forEach((r, j) =>
+      [...r].forEach((ch, i) => {
+        const c = ch === 'c' ? col : ch === 'd' ? dark : ch === 'l' ? lite : ch === 's' ? stem : 0;
+        if (c) p.put(x + i - (r.length >> 1), y + j - 1, c);
+      }),
+    );
+  }
+
+  private drawGrass(W: number, gy: number, cx: number, t: number, windOn: number, gust: (x: number) => number, pal: Pal) {
+    const p = this.pix, gr = pal.grass, top = gr.length - 1;
+    for (let x = 0; x < W; x++) {
+      const wx = x - cx;
+      const r = h2(wx, 77);
+      if (r > 0.62) continue;
+      const hgt = 2 + Math.floor(h2(wx, 5) * 4) + (r < 0.07 ? 3 : 0);
+      const sway = gust(x) * 1.8 + Math.sin(t * 1.7 + wx * 0.31) * 0.6 * windOn;
+      const shade = h2(wx, 6) < 0.5 ? 0 : 1;
+      let tipX = x;
+      for (let k = 0; k < hgt; k++) {
+        const f = (k + 1) / hgt;
+        tipX = Math.round(x + sway * f * f);
+        p.put(tipX, gy - k, gr[Math.min(top, Math.floor(f * (top - 1)) + shade + (k === hgt - 1 ? 1 : 0))]);
+      }
+      if (r < 0.02) {
+        const col = pal.flowers[Math.floor(h2(wx, 9) * 4)];
+        p.put(tipX, gy - hgt, col);
+        p.put(tipX + 1, gy - hgt, scalec(col, 0.8));
+        p.put(tipX, gy - hgt - 1, scalec(col, 1.1));
+      }
+    }
+  }
+
+  private glow(x: number, y: number, col: number, a: number) {
+    const p = this.pix;
+    p.add(x, y, col, a);
+    for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) p.add(x + dx, y + dy, col, a * 0.35);
+    for (const [dx, dy] of [[1, 1], [-1, 1], [1, -1], [-1, -1], [2, 0], [-2, 0], [0, 2], [0, -2]]) p.add(x + dx, y + dy, col, a * 0.12);
+  }
+
+  // ---------- animals ----------
+
+  private moveAnimals(stage: number, W: number, period: Period, dt: number) {
+    const sp = this.sprites;
+    const want: [Walker['kind'], Sprite, number][] = [];
+    if (stage >= 3) want.push(['squirrel', sp.squirrel, 16]);
+    if (stage >= 4) want.push(['raccoon', sp.raccoon, 8]);
+    if (stage >= 5) want.push(['deer', sp.deer, 7]);
+    if (stage >= 6) want.push(['deer', sp.deer, 6], ['squirrel', sp.squirrel, 18]);
+    while (this.walkers.length < want.length) {
+      const [kind, sprite, speed] = want[this.walkers.length];
+      const dir = Math.random() < 0.5 ? 1 : -1;
+      // they wander in from the edge of the screen
+      this.walkers.push({ kind, sprite, speed, dir: dir as 1 | -1, x: -dir * (W / 2 + 20), walking: true, timer: rand(5, 9) });
+    }
+    if (this.walkers.length > want.length) this.walkers.length = want.length;
     for (const a of this.walkers) {
       a.timer -= dt;
       if (a.timer <= 0) {
@@ -356,289 +832,20 @@ export class Scene {
       }
       if (a.walking) {
         a.x += a.dir * a.speed * dt;
-        const lim = W / 2 - 6;
+        const lim = W / 2 - 10;
         if (a.x > lim) a.dir = -1;
         if (a.x < -lim) a.dir = 1;
       }
     }
-    const drawWalker = (a: Walker) => {
-      const fr = a.walking ? Math.floor(t * 6) % 2 : a.kind === 'deer' && Math.sin(t * 0.5 + a.x) > 0 ? 2 : 0;
-      const img = (a.dir === 1 ? a.sprite.frames : a.sprite.flipped)[fr];
-      w.drawImage(img, Math.round(cx + a.x - a.sprite.w / 2), gy - a.sprite.h + 1);
-    };
-    for (const a of this.walkers) if (a.kind !== 'squirrel') drawWalker(a);
-
-    // ----- the tree -----
-    const n = tree.nodes.length;
-    const x0 = new Float32Array(n), y0 = new Float32Array(n), x1 = new Float32Array(n), y1 = new Float32Array(n), ang = new Float32Array(n);
-    const wind = this.reduced ? 0 : 1;
-    for (let i = 0; i < n; i++) {
-      const nd = tree.nodes[i];
-      const sway = Math.sin(t * 1.2 + nd.phase) * 0.011 * (nd.depth + 0.4) * wind + Math.sin(t * 0.45) * 0.006 * nd.depth * wind;
-      const p = nd.parent;
-      ang[i] = (p >= 0 ? ang[p] : 0) + nd.off + sway;
-      x0[i] = p >= 0 ? x0[p] + (x1[p] - x0[p]) * nd.at : 0;
-      y0[i] = p >= 0 ? y0[p] + (y1[p] - y0[p]) * nd.at : 0;
-      x1[i] = x0[i] + Math.cos(ang[i]) * nd.len;
-      y1[i] = y0[i] + Math.sin(ang[i]) * nd.len;
-    }
-    this.tips = [];
-    for (let i = 0; i < n; i++) if (tree.nodes[i].leaf) this.tips.push({ x: x1[i], y: y1[i], r: tree.nodes[i].leaf });
-
-    if (this.state.points <= 0 && g < 0.002) {
-      // a seed resting in the soil
-      w.fillStyle = '#3f2820';
-      w.fillRect(cx - 3, gy, 6, 1);
-      w.fillStyle = '#a4522a';
-      w.fillRect(cx - 1, gy - 2, 3, 2);
-      w.fillStyle = '#d6804c';
-      w.fillRect(cx - 1, gy - 2, 1, 1);
-      w.fillStyle = '#5a3a2a';
-      w.fillRect(cx - 1, gy - 3, 3, 1);
-    } else {
-      const leaves = (back: boolean) => {
-        const pal = back ? LEAF_BACK : LEAF_FRONT;
-        for (let i = 0; i < n; i++) {
-          const nd = tree.nodes[i];
-          if (!nd.leaf || (nd.ls % 2 === 0) !== back) continue;
-          const lx = cx + x1[i], ly = gy + y1[i], r = nd.leaf;
-          w.fillStyle = pal[0];
-          blob(w, lx, ly, r, nd.ls);
-          w.fillStyle = pal[1];
-          blob(w, lx - r * 0.15, ly - r * 0.25, r * 0.72, nd.ls + 1);
-          if (r > 1.8) {
-            w.fillStyle = pal[2];
-            blob(w, lx - r * 0.3, ly - r * 0.45, r * 0.38, nd.ls + 2);
-          }
-        }
-      };
-      leaves(true);
-      for (let pass = 0; pass < 3; pass++) {
-        w.fillStyle = pass === 0 ? BARK.mid : pass === 1 ? BARK.dark : BARK.light;
-        for (let i = 0; i < n; i++) {
-          const nd = tree.nodes[i];
-          const steps = Math.max(1, Math.ceil(nd.len));
-          for (let s = 0; s <= steps; s++) {
-            const k = s / steps;
-            const r = nd.r0 + (nd.r1 - nd.r0) * k;
-            const d = Math.max(1, Math.round(r * 2));
-            if (pass > 0 && d < 3) continue;
-            const px = Math.round(cx + x0[i] + (x1[i] - x0[i]) * k - r), py = Math.round(gy + y0[i] + (y1[i] - y0[i]) * k - r);
-            if (pass === 0) w.fillRect(px, py, d, d);
-            else if (pass === 1) w.fillRect(px + d - Math.max(1, Math.round(d * 0.3)), py, Math.max(1, Math.round(d * 0.3)), d);
-            else w.fillRect(px, py, Math.max(1, Math.round(d * 0.22)), d);
-          }
-        }
-      }
-      // roots flaring at the base
-      const r0 = tree.nodes[0]?.r0 ?? 0;
-      if (r0 > 2) {
-        w.fillStyle = BARK.mid;
-        w.fillRect(Math.round(cx - r0 * 1.5), gy - 1, Math.round(r0 * 3), 2);
-        w.fillRect(Math.round(cx - r0 * 1.25), gy - 3, Math.round(r0 * 2.5), 2);
-        w.fillStyle = BARK.dark;
-        w.fillRect(Math.round(cx + r0 * 0.8), gy - 3, Math.max(1, Math.round(r0 * 0.5)), 4);
-      }
-      // monkeys in the big branches
-      if (stage >= 6) {
-        const limbs: number[] = [];
-        for (let i = 0; i < n; i++) if (tree.nodes[i].depth >= 1 && tree.nodes[i].depth <= 2 && tree.nodes[i].len > 12) limbs.push(i);
-        const m = this.sprites.monkey;
-        for (let k = 0; k < Math.min(3, limbs.length); k++) {
-          const i = limbs[(k * 3 + (this.seed % 5)) % limbs.length];
-          const mx = cx + (x0[i] + x1[i]) / 2, my = gy + (y0[i] + y1[i]) / 2 - tree.nodes[i].r0;
-          const fr = Math.sin(t * 0.9 + k * 2) > 0.6 ? 1 : 0;
-          w.drawImage((k % 2 ? m.flipped : m.frames)[fr], Math.round(mx - m.w / 2), Math.round(my - m.h + 2));
-        }
-      }
-      leaves(false);
-      // birds resting in the leaves
-      if (stage >= 3 && this.tips.length) {
-        for (let k = 0; k < Math.min(3, stage - 2); k++) {
-          const tip = this.tips[(k * 37 + (this.seed % 97)) % this.tips.length];
-          const b = this.sprites.birds[k % 3];
-          const flip = Math.sin(t * 0.3 + k * 1.7) > 0;
-          w.drawImage((flip ? b.flipped : b.frames)[2], Math.round(cx + tip.x - b.w / 2), Math.round(gy + tip.y - tip.r - b.h + 1));
-        }
-      }
-    }
-
-    for (const a of this.walkers) if (a.kind === 'squirrel') drawWalker(a);
-
-    // birds crossing the sky
-    for (const b of this.flyers) {
-      b.x += b.dir * b.speed * dt;
-      if (b.x > W + 20 || b.x < -20) {
-        b.dir = Math.random() < 0.5 ? 1 : -1;
-        b.x = b.dir === 1 ? -12 - rand(0, 80) : W + 12 + rand(0, 80);
-        b.y = rand(0.08, 0.6);
-      }
-      const yy = gy * b.y + Math.sin(t * 2 + b.phase) * 2;
-      w.drawImage((b.dir === 1 ? b.sprite.frames : b.sprite.flipped)[Math.floor(t * 7 + b.phase) % 2], Math.round(b.x), Math.round(yy));
-    }
-
-    // butterflies
-    if (stage >= 1 && (period === 'day' || period === 'dawn') && !this.reduced) {
-      for (let i = 0; i < 3; i++) {
-        const bxx = cx + Math.sin(t * 0.35 + i * 2.1) * (tree.S * 0.5 + 14) + Math.sin(t * 1.3 + i) * 3;
-        const byy = gy - 5 - (0.5 + 0.5 * Math.sin(t * 0.5 + i * 1.3)) * Math.min(30, tree.S * 0.4 + 6) + Math.sin(t * 3 + i) * 1.5;
-        w.fillStyle = ['#ffb0d0', '#fff08a', '#b0d8ff'][i];
-        if (Math.floor(t * 8 + i) % 2) w.fillRect(Math.round(bxx) - 1, Math.round(byy), 3, 1);
-        else w.fillRect(Math.round(bxx), Math.round(byy) - 1, 1, 2);
-      }
-    }
-
-    // falling leaves
-    if (!this.reduced && stage >= 2 && this.tips.length && t > this.nextLeaf) {
-      this.dropLeaf();
-      this.nextLeaf = t + rand(1.2, 4) / (stage >= 5 ? 2 : 1);
-    }
-    for (const p of this.particles) {
-      p.life += dt;
-      if (p.kind === 'leaf') {
-        if (p.y < 0) {
-          p.x += (p.vx + Math.sin(t * 3 + p.phase) * 5) * dt;
-          p.y += p.vy * dt;
-          if (p.y >= 0) {
-            p.y = 0;
-            p.max = p.life + 2;
-          }
-        }
-        w.fillStyle = p.color;
-        w.globalAlpha = clamp((p.max - p.life) / 0.8, 0, 1);
-        w.fillRect(Math.round(cx + p.x), Math.round(gy + p.y), 2, 1);
-        w.globalAlpha = 1;
-      } else {
-        p.x += p.vx * dt;
-        p.y += p.vy * dt;
-      }
-    }
-    this.particles = this.particles.filter((p) => p.life < p.max);
-
-    if (sky.tint) {
-      w.globalCompositeOperation = 'source-atop';
-      w.fillStyle = sky.tint;
-      w.fillRect(0, 0, W, H);
-      w.globalCompositeOperation = 'source-over';
-    }
-    c.drawImage(this.world, 0, 0);
-
-    // ----- lights on top (not tinted) -----
-    if ((period === 'night' || period === 'dusk') && !this.reduced) {
-      for (let i = 0; i < (period === 'night' ? 12 : 5); i++) {
-        const fx = cx + Math.sin(t * 0.2 + i * 1.9) * (W * 0.3) + Math.sin(t * 0.7 + i) * 6;
-        const fy = gy - 4 - (0.5 + 0.5 * Math.sin(t * 0.3 + i * 2.3)) * Math.min(gy * 0.5, 40);
-        const a = 0.5 + 0.5 * Math.sin(t * 2.2 + i * 1.3);
-        c.globalAlpha = a * 0.25;
-        c.fillStyle = '#e8ff8a';
-        c.fillRect(Math.round(fx) - 1, Math.round(fy) - 1, 3, 3);
-        c.globalAlpha = a;
-        c.fillRect(Math.round(fx), Math.round(fy), 1, 1);
-      }
-      c.globalAlpha = 1;
-    }
-    for (const p of this.particles) {
-      if (p.kind !== 'spark') continue;
-      c.globalAlpha = clamp((p.max - p.life) / 0.5, 0, 1) * (0.6 + 0.4 * Math.sin(t * 20 + p.phase));
-      c.fillStyle = p.color;
-      const sx = Math.round(cx + p.x), sy = Math.round(gy + p.y);
-      c.fillRect(sx, sy, 1, 1);
-      if (p.phase > 4) {
-        c.fillRect(sx - 1, sy, 3, 1);
-        c.fillRect(sx, sy - 1, 1, 3);
-      }
-    }
-    c.globalAlpha = 1;
-  }
-
-  private syncAnimals(stage: number, W: number, period: Period) {
-    const sp = this.sprites;
-    const want: [Walker['kind'], Sprite, number][] = [];
-    if (stage >= 3) want.push(['squirrel', sp.squirrel, 14]);
-    if (stage >= 4) want.push(['raccoon', sp.raccoon, 7]);
-    if (stage >= 5) want.push(['deer', sp.deer, 6]);
-    if (stage >= 6) want.push(['deer', sp.deer, 5], ['squirrel', sp.squirrel, 16]);
-    while (this.walkers.length < want.length) {
-      const [kind, sprite, speed] = want[this.walkers.length];
-      const dir = Math.random() < 0.5 ? 1 : -1;
-      // they wander in from the edge of the screen
-      this.walkers.push({ kind, sprite, speed, dir: dir as 1 | -1, x: -dir * (W / 2 + 16), walking: true, timer: rand(5, 9) });
-    }
-    if (this.walkers.length > want.length) this.walkers.length = want.length;
 
     const birds = stage >= 2 && period !== 'night' ? Math.min(4, stage - 1) : 0;
     while (this.flyers.length < birds) {
       const dir = Math.random() < 0.5 ? 1 : -1;
       this.flyers.push({
-        sprite: sp.birds[this.flyers.length % 3], dir: dir as 1 | -1, x: dir === 1 ? -12 - rand(0, 60) : W + 12 + rand(0, 60),
-        y: rand(0.08, 0.6), speed: rand(14, 24), phase: rand(0, TAU),
+        sprite: sp.birds[this.flyers.length % 3], dir: dir as 1 | -1, x: dir === 1 ? -16 - rand(0, 60) : W + 16 + rand(0, 60),
+        y: rand(0.08, 0.55), speed: rand(16, 28), phase: rand(0, TAU),
       });
     }
     if (this.flyers.length > birds) this.flyers.length = birds;
-  }
-
-  /** Hills, distant pines and soil. Redrawn only when the view size changes. */
-  private drawBackdrop(W: number, H: number, gy: number, cx: number) {
-    const key = `${W}x${H}`;
-    if (key === this.bgKey) return;
-    this.bgKey = key;
-    this.bg.width = W;
-    this.bg.height = H;
-    const b = this.bg.getContext('2d')!;
-    for (let x = 0; x < W; x++) {
-      const u = (x - cx) / H;
-      const far = Math.round(H * 0.14 + noise1(u * 2.2 + 40, 1) * H * 0.26);
-      b.fillStyle = '#8fbf9a';
-      b.fillRect(x, gy - far, 1, far);
-      const near = Math.round(H * 0.05 + noise1(u * 4 + 90, 2) * H * 0.15);
-      b.fillStyle = '#5f9f6c';
-      b.fillRect(x, gy - near, 1, near);
-      if (h2(x - cx, 61) < 0.07) {
-        const ph = 3 + Math.floor(h2(x - cx, 62) * 5);
-        b.fillStyle = '#3d7a56';
-        for (let k = 0; k < ph; k++) {
-          const half = Math.floor(((k + 1) / ph) * 2.5);
-          b.fillRect(x - half, gy - near - ph + k, half * 2 + 1, 1);
-        }
-      }
-    }
-    b.fillStyle = '#5a3a2a';
-    b.fillRect(0, gy, W, H - gy);
-    b.fillStyle = '#6cc24a';
-    b.fillRect(0, gy, W, 1);
-    b.fillStyle = '#3f8f3a';
-    b.fillRect(0, gy + 1, W, 1);
-    for (let y = gy + 2; y < H; y++)
-      for (let x = 0; x < W; x++) {
-        const r = h2(x - cx, y - gy + 1000);
-        if (r < 0.1) {
-          b.fillStyle = r < 0.04 ? '#7a5a48' : '#3f2820';
-          b.fillRect(x, y, r < 0.02 ? 2 : 1, 1);
-        } else if (y === gy + 2 && r < 0.45) {
-          b.fillStyle = '#3f8f3a';
-          b.fillRect(x, y, 1, 1);
-        }
-      }
-  }
-}
-
-function disc(c: CanvasRenderingContext2D, cx: number, cy: number, r: number, color: string) {
-  c.fillStyle = color;
-  const R = Math.ceil(r);
-  for (let dy = -R; dy <= R; dy++) {
-    const s = Math.sqrt(Math.max(0, r * r - dy * dy));
-    if (s < 0.4) continue;
-    c.fillRect(Math.round(cx - s), Math.round(cy + dy), Math.max(1, Math.round(s * 2)), 1);
-  }
-}
-
-/** A ragged-edged disc, used for leaf clumps. */
-function blob(c: CanvasRenderingContext2D, cx: number, cy: number, r: number, seed: number) {
-  const R = Math.ceil(r);
-  for (let dy = -R; dy <= R; dy++) {
-    const s = Math.sqrt(Math.max(0, r * r - dy * dy));
-    if (s < 0.4) continue;
-    const j = h2(seed, dy) < 0.5 ? 0 : 1;
-    c.fillRect(Math.round(cx - s) - j, Math.round(cy + dy), Math.max(1, Math.round(s * 2) + j), 1);
   }
 }

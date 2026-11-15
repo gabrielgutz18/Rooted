@@ -4,11 +4,13 @@ import { stageFor, VERSES } from '../lib/growth';
 
 export interface HeroHandle {
   celebrate(o: { points: number; stageName?: string; arrivals?: string[] }): void;
+  sparkle(): void;
 }
 
 interface Props {
   points: number;
   seed: string;
+  species?: string;
   hour?: number;
   owner?: string; // set when visiting someone else's tree
   onBack?: () => void;
@@ -23,7 +25,7 @@ const GREETING: Record<Period, string> = {
   night: 'Good night',
 };
 
-export default function Hero({ points, seed, hour, owner, onBack, onPeriod, ref }: Props) {
+export default function Hero({ points, seed, species, hour, owner, onBack, onPeriod, ref }: Props) {
   const boxRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const scene = useRef<Scene | null>(null);
@@ -35,7 +37,7 @@ export default function Hero({ points, seed, hour, owner, onBack, onPeriod, ref 
   const [verse, setVerse] = useState<{ key: number; ref: string; text: string } | null>(null);
 
   useEffect(() => {
-    const s = new Scene(canvasRef.current!, { points, seed, hour });
+    const s = new Scene(canvasRef.current!, { points, seed, species, hour });
     s.onPeriod = (p) => {
       setPeriod(p);
       onPeriod(p);
@@ -51,8 +53,8 @@ export default function Hero({ points, seed, hour, owner, onBack, onPeriod, ref 
   }, []);
 
   useEffect(() => {
-    if (scene.current) scene.current.state = { points, seed, hour };
-  }, [points, seed, hour]);
+    if (scene.current) scene.current.state = { points, seed, species, hour };
+  }, [points, seed, species, hour]);
 
   useImperativeHandle(ref, () => ({
     celebrate({ points: p, stageName, arrivals }) {
@@ -64,6 +66,9 @@ export default function Hero({ points, seed, hour, owner, onBack, onPeriod, ref 
         setBanner({ key: id, title: stageName, lines: (arrivals ?? []).map((a) => `${a} moved in!`) });
         setTimeout(() => setBanner((b) => (b?.key === id ? null : b)), 4500);
       }
+    },
+    sparkle() {
+      scene.current?.burst(50);
     },
   }));
 

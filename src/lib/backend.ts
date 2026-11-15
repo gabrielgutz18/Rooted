@@ -2,6 +2,7 @@
 //  - cloud: Supabase (accounts, sync, friends on any device)
 //  - local: this browser only (works with zero setup, good for trying things out)
 
+import type { PostgrestError } from '@supabase/supabase-js';
 import { supabase } from './supabase';
 import { dayStats, type DayStat } from './growth';
 
@@ -13,6 +14,7 @@ export interface Profile {
   entry_count: number;
   last_entry_at: string | null;
   created_at: string;
+  tree?: string | null; // which kind of tree they grow; null until they choose
 }
 
 export interface AdminUser extends Profile {
@@ -40,6 +42,7 @@ export interface Backend {
   signOut(): Promise<void>;
   profile(id: string): Promise<Profile>;
   listProfiles(): Promise<Profile[]>;
+  setTree(tree: string): Promise<void>;
   listEntries(): Promise<Entry[]>;
   addEntry(input: EntryInput): Promise<Entry>;
   removeEntry(id: string): Promise<void>;
@@ -52,8 +55,20 @@ export interface Backend {
 
 function cloud(): Backend {
   const sb = supabase!;
-  const P = 'id, display_name, is_admin, points, entry_count, last_entry_at, created_at';
+  const BASE = 'id, display_name, is_admin, points, entry_count, last_entry_at, created_at';
+  let P = `${BASE}, tree`;
   const E = 'id, subject, note, points, tags, created_at';
+  // Until the tree-choice migration has been run there is no `tree` column; fall back
+  // to the old columns so the app keeps working (everyone shows as an oak).
+  async function profiles<T>(run: (cols: string) => PromiseLike<{ data: unknown; error: PostgrestError | null }>): Promise<T> {
+    let { data, error } = await run(P);
+    if (error && P !== BASE && (error.code === '42703' || /\btree\b/.test(error.message))) {
+      P = BASE;
+      ({ data, error } = await run(P));
+    }
+    if (error) throw error;
+    return data as T;
+  }
   return {
     mode: 'cloud',
     async getUserId() {
@@ -76,14 +91,20 @@ function cloud(): Backend {
       await sb.auth.signOut();
     },
     async profile(id) {
-      const { data, error } = await sb.from('profiles').select(P).eq('id', id).single();
-      if (error) throw error;
-      return data as Profile;
+      return profiles<Profile>((cols) => sb.from('profiles').select(cols).eq('id', id).single());
     },
     async listProfiles() {
-      const { data, error } = await sb.from('profiles').select(P).order('points', { ascending: false }).limit(500);
-      if (error) throw error;
-      return data as Profile[];
+      return profiles<Profile[]>((cols) => sb.from('profiles').select(cols).order('points', { ascending: false }).limit(500));
+    },
+    async setTree(tree) {
+      const id = (await sb.auth.getSession()).data.session?.user.id;
+      if (!id) throw new Error('Not signed in');
+      const { error } = await sb.from('profiles').update({ tree }).eq('id', id);
+      if (error) {
+        if (error.code === '42703' || /\btree\b/.test(error.message))
+          throw new Error('Choosing a tree needs the latest database update (supabase/migrations) — ask the admin to run it.');
+        throw error;
+      }
     },
     async listEntries() {
       const all: Entry[] = [];
@@ -121,7 +142,7 @@ function cloud(): Backend {
 // ---------------- local ----------------
 
 interface LocalDB {
-  users: { id: string; name: string; email: string; is_admin: boolean; created_at: string }[];
+  users: { id: string; name: string; email: string; is_admin: boolean; created_at: string; tree?: string | null }[];
   entries: (Entry & { user_id: string })[];
   session: string | null;
 }
@@ -150,7 +171,7 @@ function local(): Backend {
   const toProfile = (db: LocalDB, u: LocalDB['users'][number]): Profile => {
     const mine = db.entries.filter((e) => e.user_id === u.id);
     return {
-      id: u.id, display_name: u.name, is_admin: u.is_admin, created_at: u.created_at,
+      id: u.id, display_name: u.name, is_admin: u.is_admin, created_at: u.created_at, tree: u.tree ?? null,
       points: mine.reduce((s, e) => s + e.points, 0), entry_count: mine.length,
       last_entry_at: mine.map((e) => e.created_at).sort().pop() ?? null,
     };
@@ -201,6 +222,13 @@ function local(): Backend {
     async listProfiles() {
       const db = read();
       return db.users.map((u) => toProfile(db, u)).sort((a, b) => b.points - a.points);
+    },
+    async setTree(tree) {
+      const db = read();
+      const user = db.users.find((u) => u.id === me(db));
+      if (!user) throw new Error('Not signed in');
+      user.tree = tree;
+      write(db);
     },
     async listEntries() {
       const db = read();

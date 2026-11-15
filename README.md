@@ -19,12 +19,15 @@ npm run dev
 With no Supabase keys the app runs in **trial mode**: accounts and notes are kept only in
 that browser. Good for trying it out.
 
-Add `?hour=21` to the address to preview another time of day (0–23).
+Add `?hour=21` to the address to preview another time of day (0–23), and `?tree=sakura`
+to preview another tree (`oak`, `sakura`, `maple`, `apple`, `birch`, `willow`, `pine`).
+Everyone picks their own tree on first visit, and can change it from the menu (Choose tree).
 
 ## Connect Supabase
 
 1. Create a project at supabase.com.
-2. SQL Editor → paste `supabase/migrations/20261115000000_rooted.sql` → Run.
+2. SQL Editor → paste each file in `supabase/migrations/` in order (oldest first) → Run.
+   Already set up before tree choice existed? Just run `20261116000000_tree_choice.sql`.
 3. Authentication → Sign In / Providers → Email → turn **Confirm email** off
    (so creating an account logs you straight in).
 4. Copy `.env.example` to `.env.local` and fill in the project URL and publishable key
@@ -45,8 +48,13 @@ setting the same two `VITE_SUPABASE_…` variables there.
 | --- | --- |
 | Stage names, point thresholds, which animal arrives when, subject prompts | `src/lib/growth.ts` |
 | The word analyzer (keywords, points per theme, Bible reference detection) | `src/lib/analyze.ts` |
-| Tree, sky, hills, animal behaviour | `src/scene/engine.ts` |
+| The trees you can grow: colours, branch shape, what falls from them | `src/scene/species.ts` |
+| Wind, swaying, fluttering leaves, animals, sun and moon | `src/scene/engine.ts` |
+| Leaf clumps (outlined, lit tufts) | `src/scene/foliage.ts` |
+| Sky, mountains, hills, soil | `src/scene/backdrop.ts` |
+| Pixel drawing helpers (bark shading, leaf shapes, dithering) | `src/scene/raster.ts` |
 | Animal pixel art | `src/scene/sprites.ts` |
+| Tree picker | `src/components/TreePicker.tsx` |
 | Database tables and security rules | `supabase/migrations/` |
 
 ## Privacy

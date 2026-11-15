@@ -1,35 +1,68 @@
 // Hand-drawn pixel animals. Each letter is a colour from the palette, '.' is empty.
-// All face right; the scene flips them when they turn around.
+// All face right; the scene flips them when they turn around. They are drawn small and
+// then doubled with Scale2x (which rounds off the corners), given a lit top and shaded
+// underside, and a dark outline, so they sit well in the finer-pixel scene.
+
+import { hex, scalec, type PSprite } from './raster';
 
 export interface Sprite {
   w: number;
   h: number;
-  frames: HTMLCanvasElement[]; // facing right
-  flipped: HTMLCanvasElement[]; // facing left
+  frames: PSprite[]; // facing right
 }
 
 type Pal = Record<string, string>;
 
-function render(rows: string[], pal: Pal, flip: boolean): HTMLCanvasElement {
-  const w = Math.max(...rows.map((r) => r.length));
-  const c = document.createElement('canvas');
-  c.width = w;
-  c.height = rows.length;
-  const ctx = c.getContext('2d')!;
+function render(rows: string[], pal: Pal): PSprite {
+  const w = Math.max(...rows.map((r) => r.length)), h = rows.length;
+  const d = new Uint32Array(w * h);
   rows.forEach((row, y) =>
     [...row].forEach((ch, x) => {
-      const col = pal[ch];
-      if (!col) return;
-      ctx.fillStyle = col;
-      ctx.fillRect(flip ? w - 1 - x : x, y, 1, 1);
+      const c = pal[ch];
+      if (c) d[y * w + x] = hex(c);
     }),
   );
-  return c;
+  return { w, h, d };
+}
+
+function scale2x({ w, h, d }: PSprite): PSprite {
+  const W = w * 2, out = new Uint32Array(W * h * 2);
+  const at = (x: number, y: number) => (x < 0 || y < 0 || x >= w || y >= h ? 0 : d[y * w + x]);
+  for (let y = 0; y < h; y++)
+    for (let x = 0; x < w; x++) {
+      const P = at(x, y), A = at(x, y - 1), B = at(x + 1, y), C = at(x - 1, y), D = at(x, y + 1);
+      out[2 * y * W + 2 * x] = C === A && C !== D && A !== B ? A : P;
+      out[2 * y * W + 2 * x + 1] = A === B && A !== C && B !== D ? B : P;
+      out[(2 * y + 1) * W + 2 * x] = D === C && D !== B && C !== A ? C : P;
+      out[(2 * y + 1) * W + 2 * x + 1] = B === D && B !== A && D !== C ? D : P;
+    }
+  return { w: W, h: h * 2, d: out };
+}
+
+function finish({ w, h, d }: PSprite): PSprite {
+  const W = w + 2, H = h + 2;
+  const body = new Uint32Array(W * H);
+  const at = (x: number, y: number) => (x < 0 || y < 0 || x >= w || y >= h ? 0 : d[y * w + x]);
+  for (let y = 0; y < h; y++)
+    for (let x = 0; x < w; x++) {
+      const c = d[y * w + x];
+      if (!c) continue;
+      body[(y + 1) * W + x + 1] = !at(x, y - 1) ? scalec(c, 1.15) : !at(x, y + 1) ? scalec(c, 0.78) : c;
+    }
+  const out = new Uint32Array(body);
+  for (let y = 0; y < H; y++)
+    for (let x = 0; x < W; x++) {
+      const i = y * W + x;
+      if (body[i]) continue;
+      const n = (x > 0 && body[i - 1]) || (x < W - 1 && body[i + 1]) || (y > 0 && body[i - W]) || (y < H - 1 && body[i + W]);
+      if (n) out[i] = scalec(n, 0.3);
+    }
+  return { w: W, h: H, d: out };
 }
 
 function make(frames: string[][], pal: Pal): Sprite {
-  const f = frames.map((r) => render(r, pal, false));
-  return { w: f[0].width, h: f[0].height, frames: f, flipped: frames.map((r) => render(r, pal, true)) };
+  const f = frames.map((r) => finish(scale2x(render(r, pal))));
+  return { w: f[0].w, h: f[0].h, frames: f };
 }
 
 const INK = '#160c1c';

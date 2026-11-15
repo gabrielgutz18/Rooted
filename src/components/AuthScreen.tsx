@@ -16,7 +16,7 @@ export default function AuthScreen() {
 
   // A grown tree behind the form, to show what you are planting.
   useEffect(() => {
-    const s = new Scene(canvasRef.current!, { points: 1500, seed: 'welcome' });
+    const s = new Scene(canvasRef.current!, { points: 2200, seed: 'welcome', species: 'sakura' });
     const fit = () => s.resize(window.innerWidth, window.innerHeight);
     fit();
     window.addEventListener('resize', fit);
