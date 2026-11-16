@@ -495,7 +495,6 @@ const tl: Strings = {
   updatesGreeting: 'Mahal na kaibigan, narito ang mga bagong tumubo sa Rooted nitong mga nakaraang araw.',
   updatesNew: 'Bago',
   updatesSignoff: 'Salamat sa pagsusulat, at sa paglago kasama namin.',
- 
   updatesRollUp: 'Irolyo ang balumbon',
   pickFirstBlurb: 'Bawat talang isusulat mo ay tumutulong sa paglago nito. Puwede kang magpalit kahit kailan.',
   pickBlurb: 'Hindi magbabago ang iyong paglago — ang uri lang ng puno ang mapapalitan.',

@@ -81,7 +81,6 @@ export default function UpdateNotice({ onClose }: { onClose(): void }) {
             <footer className="scroll-sign">
               <p>{t.updatesSignoff}</p>
               <p className="scroll-signature">— Rooted</p>
-              <p className="scroll-verse">{t.updatesVerse}</p>
             </footer>
             <button className="btn scroll-close" onClick={onClose}>
               {t.updatesRollUp}
