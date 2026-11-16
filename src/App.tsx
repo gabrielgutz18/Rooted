@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { backend, type AdminUser, type Entry, type EntryInput, type NoteLock, type Profile } from './lib/backend';
-import { ARRIVALS, dayStats, dayStreak, stageFor, type DayStat } from './lib/growth';
+import { ARRIVALS, dayKey, dayStats, dayStreak, stageFor, type DayStat } from './lib/growth';
+import { dayOf, daysIdle, lastDayOf } from './lib/streak';
 import { errorText, strings, useT } from './lib/i18n';
 import LangSwitch from './components/LangSwitch';
 import type { Period } from './scene/engine';
@@ -10,6 +11,8 @@ import { Composer, Notes } from './components/Diary';
 import AuthScreen from './components/AuthScreen';
 import TreePicker from './components/TreePicker';
 import InstallDialog from './components/InstallDialog';
+import UpdateNotice from './components/UpdateNotice';
+import { hasUnseenUpdate, markUpdatesSeen } from './lib/updates';
 import { RecoveryDialog, UnlockPanel } from './components/Unlock';
 import UsernameDialog from './components/UsernameDialog';
 import { speciesOf } from './scene/species';
@@ -60,10 +63,13 @@ function Garden({ userId }: { userId: string }) {
   const [notice, setNotice] = useState<string | null>(null);
   const syncing = useRef(false);
   const [view, setView] = useState<View>({ kind: 'home' });
-  const [visitDays, setVisitDays] = useState<DayStat[]>([]);
+  const [visitDays, setVisitDays] = useState<DayStat[] | null>(null); // null while loading
+  const visitId = useRef<string | null>(null); // a late answer for a tree no longer shown is dropped
   const [menuOpen, setMenuOpen] = useState(false);
   const [picking, setPicking] = useState(false);
   const [installHelp, setInstallHelp] = useState(false);
+  const [updatesOpen, setUpdatesOpen] = useState(false);
+  const [updateUnseen, setUpdateUnseen] = useState(hasUnseenUpdate);
   const [nameLater, setNameLater] = useState(false);
   const install = useInstall();
   const askedTree = useRef(false);
@@ -219,6 +225,7 @@ function Garden({ userId }: { userId: string }) {
     else setPicking(false);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [me]);
+  const closeUpdates = useCallback(() => setUpdatesOpen(false), []);
 
   // Accounts made with an email before usernames pick one once (null: not yet; undefined:
   // the usernames migration isn't run, so don't ask). The admin keeps the email.
@@ -233,6 +240,8 @@ function Garden({ userId }: { userId: string }) {
   const points = useMemo(() => (open ? entries.reduce((s, e) => s + e.points, 0) : (me?.points ?? 0)), [open, entries, me]);
   const myDays = useMemo(() => (open ? dayStats(entries) : lockedDays), [open, entries, lockedDays]);
   const friends = useMemo(() => people.filter((p) => p.id !== userId), [people, userId]);
+  const myStreak = useMemo(() => dayStreak(myDays), [myDays]);
+  const today = dayKey(new Date());
 
   const setPeriod = useCallback((p: Period) => {
     document.documentElement.dataset.period = p;
@@ -240,6 +249,7 @@ function Garden({ userId }: { userId: string }) {
 
   async function save(input: EntryInput) {
     const before = stageFor(points).index;
+    const streakBefore = myStreak;
     const id = crypto.randomUUID();
     let created: Entry;
     try {
@@ -252,8 +262,10 @@ function Garden({ userId }: { userId: string }) {
     }
     setEntries((list) => [created, ...list]);
     const after = stageFor(points + created.points).index;
+    const streakAfter = dayStreak(dayStats([created, ...entries]));
     hero.current?.celebrate({
       points: created.points,
+      streakFrom: streakAfter > streakBefore ? streakBefore : undefined,
       stage: after > before ? after : undefined,
       arrivals: ARRIVALS.filter((a) => a.stage > before && a.stage <= after).map((a) => a.stage),
     });
@@ -280,17 +292,27 @@ function Garden({ userId }: { userId: string }) {
     setMenuOpen(false);
     window.scrollTo({ top: 0 });
     if (next.kind === 'visit') {
-      setVisitDays([]);
-      backend.activity(next.profile.id).then(setVisitDays).catch((err) => setError(message(err)));
+      setVisitDays(null);
+      const id = (visitId.current = next.profile.id);
+      backend
+        .activity(id)
+        .then((days) => visitId.current === id && setVisitDays(days))
+        .catch((err) => setError(message(err)));
+    } else {
+      visitId.current = null;
     }
   }
 
   const visiting = view.kind === 'visit' ? view.profile : null;
+  // the lamp and the leaves, for whichever tree is showing
+  const shownStreak = visiting ? (visitDays ? dayStreak(visitDays) : undefined) : loading ? undefined : myStreak;
+  const lastDay = visiting ? (visitDays ? lastDayOf(visitDays) : dayOf(visiting.last_entry_at)) : lastDayOf(myDays);
 
   return (
     <div className="shell">
       <button className="btn menu-btn" onClick={() => setMenuOpen((o) => !o)} aria-expanded={menuOpen} aria-controls="side-menu">
         {t.menu}
+        {updateUnseen && <span className="new-dot" aria-label={t.updatesNew} />}
       </button>
       {menuOpen && <div className="scrim" onClick={() => setMenuOpen(false)} />}
 
@@ -311,6 +333,18 @@ function Garden({ userId }: { userId: string }) {
             }}
           >
             {t.chooseTree} · <span className="side-link-meta">{t.species[speciesOf(me?.tree).id].name}</span>
+          </button>
+          <button
+            className="side-link"
+            onClick={() => {
+              setMenuOpen(false);
+              setUpdatesOpen(true);
+              markUpdatesSeen();
+              setUpdateUnseen(false);
+            }}
+          >
+            {t.updatesMenu}
+            {updateUnseen && <span className="new-tag">{t.updatesNew}</span>}
           </button>
           {!install.installed && (
             <button className="side-link" onClick={installApp}>
@@ -365,6 +399,9 @@ function Garden({ userId }: { userId: string }) {
           species={visiting ? (visiting.tree ?? undefined) : (treeParam ?? me?.tree ?? undefined)}
           hour={hourParam}
           owner={visiting?.display_name}
+          streak={shownStreak}
+          todayDone={lastDay === today}
+          idle={daysIdle(lastDay)}
           onBack={() => go({ kind: 'home' })}
           onPeriod={setPeriod}
         />
@@ -378,7 +415,6 @@ function Garden({ userId }: { userId: string }) {
                   <h2 id="track-title" className="panel-title">
                     {t.progress}
                   </h2>
-                  <span className="muted">{t.streak(dayStreak(myDays))}</span>
                 </div>
                 <Heatmap days={myDays} />
               </section>
@@ -392,14 +428,13 @@ function Garden({ userId }: { userId: string }) {
                 <h2 id="visit-title" className="panel-title">
                   {t.theirProgress(visiting.display_name)}
                 </h2>
-                <span className="muted">{t.streak(dayStreak(visitDays))}</span>
               </div>
               <div className="stat-grid">
                 <Stat value={visiting.points} label={t.statGrowth} />
                 <Stat value={visiting.entry_count} label={t.statNotes} />
                 <Stat value={t.stages[stageFor(visiting.points).index]} label={t.statStage} />
               </div>
-              <Heatmap key={visiting.id} days={visitDays} />
+              <Heatmap key={visiting.id} days={visitDays ?? []} />
               <p className="muted small">{t.notesPrivate}</p>
             </section>
           )}
@@ -410,6 +445,7 @@ function Garden({ userId }: { userId: string }) {
 
       {needsName && <UsernameDialog onDone={namePicked} onLater={() => setNameLater(true)} />}
       {!needsName && picking && <TreePicker current={me?.tree} first={me?.tree == null} hour={hourParam} onPick={chooseTree} onClose={closePicker} />}
+      {updatesOpen && <UpdateNotice onClose={closeUpdates} />}
       {installHelp && <InstallDialog platform={install.platform} onClose={() => setInstallHelp(false)} />}
       {recovery && <RecoveryDialog key={recovery.code ?? 'new'} code={recovery.code} onClose={closeRecovery} />}
 

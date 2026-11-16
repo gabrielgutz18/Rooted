@@ -26,6 +26,19 @@ Everyone picks their own tree on first visit, and can change it from the menu (C
 To try trial mode while Supabase keys are set, start the `rooted-trial` launch entry
 (port 5177): it hides the keys from that one server only.
 
+## Streak lamp and falling leaves
+
+**Your daily streak** is a pixel lamp on a scrap of paper in the corner of the tree. It counts
+the days in a row with at least one note (today only breaks the streak once it's over), and
+its fire changes colour as the streak grows: orange (Ember), then gold at 10 days, green at 20,
+sky blue at 30, deep blue at 50, violet at 100 and white Glory at 200. When a note makes the
+streak longer, the lamp flares up and throws sparks, and reaching a new colour says so.
+With no streak the lamp is out. Friends' trees show their lamp too.
+
+A tree left alone loses its leaves: they stay full for 2 days after the last note, then dry
+to brown and fall, and the branches are bare by day 14. It's only how the tree looks: no growth
+points are lost, and one note brings the leaves back. Numbers are in `src/lib/streak.ts`.
+
 ## Languages: English and Tagalog
 
 English is the default. **Wika / Language** (on the sign-in card and at the bottom of the
@@ -127,6 +140,8 @@ setting the same two `VITE_SUPABASE_…` variables there.
 | What | File |
 | --- | --- |
 | Stage names, point thresholds, which animal arrives when, subject prompts | `src/lib/growth.ts` |
+| Streak lamp colours (10, 20, 30, 50, 100, 200 days) and when leaves fall | `src/lib/streak.ts` |
+| The streak lamp (pixel lantern, paper card, flare) | `src/components/StreakLamp.tsx` |
 | The word analyzer (English + Tagalog keywords, points per theme, Bible reference detection) | `src/lib/analyze.ts` |
 | Spam check (random typing, repeats) and note limits | `src/lib/spam.ts` |
 | Every piece of text in English and Tagalog, the language switch | `src/lib/i18n.tsx` |

@@ -41,6 +41,8 @@ const HILL_LIGHT: Record<Period, number> = { dawn: -0.8, day: -0.35, dusk: 0.8, 
 
 const GREEN = ['#0c2216', '#174026', '#215a2e', '#2f7436', '#43903c', '#64ac46', '#8cc652', '#bce06c'];
 const STEM = ['#1f4a22', '#2e6a2c', '#46893a', '#64a845', '#8cc457', '#b4dc70'];
+// What leaves dry to before they fall, when the tree has been left alone (dark → light).
+const DRY = ['#24160c', '#3e2814', '#5a3a1a', '#76501f', '#926626', '#ab7c30', '#c4963e', '#dab052'];
 const SPARKS = ['#fff6c8', '#ffd76a', '#aae654', '#ffffff'].map(hex);
 
 const rand = (a: number, b: number) => a + Math.random() * (b - a);
@@ -107,6 +109,7 @@ export interface SceneState {
   seed: string;
   species?: string;
   hour?: number; // override the clock (for previews)
+  bare?: number; // 0 = full leaves, 1 = bare branches (no notes for a long while)
 }
 
 export interface SceneOptions {
@@ -127,6 +130,7 @@ export class Scene {
   private last = 0;
   private t = 0;
   private g = -1;
+  private bare = 0;
   private viewH = 0;
   private seedStr = '';
   private seed = 0;
@@ -185,8 +189,8 @@ export class Scene {
 
   private dropLeaf() {
     const c = this.clumps[(Math.random() * this.clumps.length) | 0];
-    const pal = this.palette(speciesOf(this.state.species), this.period ?? 'day');
     const sp = speciesOf(this.state.species);
+    const pal = this.palette(sp, this.period ?? 'day', this.dryLevel());
     const W = this.pix.w, gy = this.pix.h - Math.max(5, Math.round(this.pix.h * 0.15));
     this.particles.push({
       kind: sp.fallKind, x: c.x - Math.round(W / 2) + rand(-c.r, c.r), y: c.y - gy + rand(-c.r * 0.5, c.r * 0.5),
@@ -210,13 +214,21 @@ export class Scene {
     this.frame(dt);
   };
 
-  private palette(sp: Species, period: Period): Pal {
-    const key = sp.id + period;
+  /** How far the leaves have dried, in 5 steps (so the baked clumps can be reused). */
+  private dryLevel(): number {
+    return Math.round(clamp(this.bare * 1.6, 0, 1) * 4);
+  }
+
+  private palette(sp: Species, period: Period, dry = 0): Pal {
+    const key = sp.id + period + dry;
     let pl = this.palCache.get(key);
     if (pl) return pl;
     const G = GRADE[period];
+    const dk = (dry / 4) * 0.7;
+    const parch = (list: string[]) => (dk ? list.map((h, i) => mixc(hex(h), hex(DRY[Math.min(DRY.length - 1, i)]), dk)) : list.map(hex));
+    const gradeDry = (list: string[]) => parch(list).map((c) => grade(c, G));
     const bark = gradeAll(sp.bark, G);
-    const leaves = gradeAll(sp.leaves, G);
+    const leaves = gradeDry(sp.leaves);
     const backTint = grade(hex('#16304a'), G);
     pl = {
       bark,
@@ -224,12 +236,12 @@ export class Scene {
       root: bark.map((c) => scalec(c, 0.72)),
       leaves,
       leavesBack: leaves.map((c, i) => (i === 0 ? c : scalec(mixc(c, backTint, 0.18), 0.8))),
-      sproutLeaves: sp.foliage === 'blossom' ? gradeAll(GREEN, G) : leaves,
+      sproutLeaves: sp.foliage === 'blossom' ? gradeDry(GREEN) : leaves,
       stem: gradeAll(STEM, G),
       flower: grade(hex(sp.flower ?? '#ffffff'), G),
       fruit: sp.fruit ? grade(hex(sp.fruit), G) : 0,
-      fall: sp.fall.map((h) => {
-        const c = grade(hex(h), G);
+      fall: parch(sp.fall).map((h) => {
+        const c = grade(h, G);
         return [scalec(c, 0.7), c, scalec(c, 1.18)];
       }),
       grass: gradeAll(['#24502c', '#2f6a32', '#3f8a3a', '#5aa843', '#7cc450', '#a6dc6a'], G),
@@ -270,6 +282,7 @@ export class Scene {
       this.seedStr = this.state.seed;
       this.seed = hashStr(this.state.seed);
       this.g = target;
+      this.bare = clamp(this.state.bare ?? 0, 0, 1);
       this.viewH = 0;
       this.walkers = [];
       this.flyers = [];
@@ -283,6 +296,11 @@ export class Scene {
     this.g += (target - this.g) * Math.min(1, dt * 0.8);
     if (Math.abs(target - this.g) < 0.0004) this.g = target;
     const g = this.g;
+    // leaves grow back quickly after a note, and fall slowly
+    const bareTarget = clamp(this.state.bare ?? 0, 0, 1);
+    this.bare += (bareTarget - this.bare) * Math.min(1, dt * (bareTarget < this.bare ? 0.9 : 0.35));
+    if (Math.abs(bareTarget - this.bare) < 0.002) this.bare = bareTarget;
+    const bare = this.bare;
     const stage = Math.floor(g * (STAGES.length - 1) + 1e-6);
     const tree = buildTree(sp, this.seed, g);
 
@@ -320,7 +338,8 @@ export class Scene {
       this.onPeriod?.(period);
     }
     const sky = SKY[period];
-    const pal = this.palette(sp, period);
+    const dry = this.dryLevel();
+    const pal = this.palette(sp, period, dry);
 
     const bgKey = `${W}x${H}:${period}:${sp.id}`; // each tree stands in its own native land
     if (bgKey !== this.bgKey) {
@@ -374,7 +393,10 @@ export class Scene {
     for (let i = 0; i < n; i++) {
       const nd = tree.nodes[i];
       if (!nd.leaf || tree.sprout) continue;
-      const R = Math.max(1, Math.round(nd.leaf * z * (willow ? 0.7 : 1)));
+      // a neglected tree loses its clumps one by one, each shrinking before it goes
+      const keep = bare > 0 ? clamp((h2(nd.ls, 91) - bare * 1.1 + 0.1) / 0.1, 0, 1) : 1;
+      if (keep <= 0) continue;
+      const R = Math.max(1, Math.round(nd.leaf * z * (willow ? 0.7 : 1) * (0.35 + 0.65 * keep)));
       clumps.push({
         x: Math.round(cx + x1[i] * z), y: Math.round(gy + y1[i] * z - R * 0.2), r: R, ls: nd.ls,
         back: pine ? nd.ls % 4 === 0 : nd.ls % 2 === 0, squash: nd.squash,
@@ -411,7 +433,7 @@ export class Scene {
     const leafLen = pine ? clamp(1.2 + z, 2, 4.5) : clamp(1.4 + z * 1.25, 2.4, 6.5);
     const leafWid = pine ? 0.6 : sp.foliage === 'blossom' ? leafLen * 0.7 : leafLen * 0.5;
     const style: ClumpStyle = pine ? 'pine' : sp.foliage === 'blossom' ? 'blossom' : 'round';
-    const keyBase = `${sp.id}|${period}|${lxq}`;
+    const keyBase = `${sp.id}|${period}|${lxq}|${dry}`;
     const wood = this.woodRamp(sp, period, pal, g);
     const rf = clamp(0.4 + g * 4, 0.4, 1) * z; // seedlings get thinner stems
     const limbs = (pass: 0 | 1) => {
@@ -434,7 +456,7 @@ export class Scene {
       this.drawSeed(cx, gy, z, L, period);
     } else if (tree.sprout) {
       limbs(1);
-      this.drawSprout(cx + x1[0] * z, gy + y1[0] * z, cx + x0[0] * z, gy + y0[0] * z, tree, g, z, pal, lxs, ft, gust);
+      this.drawSprout(cx + x1[0] * z, gy + y1[0] * z, cx + x0[0] * z, gy + y0[0] * z, tree, g, z, pal, lxs, ft, gust, bare);
     } else {
       for (const c of clumps) if (c.back) this.drawClump(c, true, pal, keyBase, style, L, lxs, leafLen, leafWid, ft, gust);
       if (willow) for (const c of clumps) if (c.back) this.drawStrands(c, pal.leavesBack, L, lxs, leafLen, ft, gust, gy, cx);
@@ -510,7 +532,8 @@ export class Scene {
     if (!this.reduced && (stage >= 2 || (sp.fallKind === 'petal' && stage >= 1)) && clumps.length && t > this.nextLeaf) {
       this.dropLeaf();
       const gs = gust(cx);
-      this.nextLeaf = t + rand(1.2, 4) / ((stage >= 5 ? 2 : 1) * sp.fallRate * (0.6 + gs * 1.6));
+      const shedding = bare > 0 && bare < 1 ? 1 + bare * 5 : 1; // a tree that's losing its leaves drops more
+      this.nextLeaf = t + rand(1.2, 4) / ((stage >= 5 ? 2 : 1) * sp.fallRate * (0.6 + gs * 1.6) * shedding);
     }
     for (const q of this.particles) {
       q.life += dt;
@@ -715,11 +738,12 @@ export class Scene {
   /** A seedling: a green stem and its first few leaves. */
   private drawSprout(
     tx: number, ty: number, bx: number, by: number, tree: Tree, g: number, z: number, pal: Pal, lxs: number, t: number,
-    gust: (x: number) => number,
+    gust: (x: number) => number, bare: number,
   ) {
     const p = this.pix;
     const nd = tree.nodes[0];
-    const count = 2 + Math.floor(clamp(g / 0.1, 0, 0.99) * 3);
+    const full = 2 + Math.floor(clamp(g / 0.1, 0, 0.99) * 3);
+    const count = Math.max(1, full - Math.round(bare * full)); // one dry leaf hangs on
     const len = clamp(nd.leaf * z * 1.5, 3, 16);
     const gs = gust(tx);
     const ramp = pal.sproutLeaves;

@@ -8,6 +8,7 @@ import type { Platform } from './install';
 import { SPECIES, type SpeciesId } from '../scene/species';
 import { LANDS } from '../scene/lands';
 import { ARRIVALS, STAGES, SUBJECT_PROMPTS, VERSES } from './growth';
+import { LEAVES_GONE_DAYS, type FlameId } from './streak';
 
 export type Lang = 'en' | 'tl';
 
@@ -32,6 +33,7 @@ const en = {
   myTree: 'My tree',
   chooseTree: 'Choose tree',
   installApp: 'Install app',
+  updatesMenu: 'Updates',
   adminUsers: 'Admin · users',
   friends: 'Friends',
   noFriends: 'No one else has planted a tree yet. Invite a friend to sign up.',
@@ -51,6 +53,28 @@ const en = {
   // progress
   progress: 'Progress',
   streak: (n: number) => `${n}-day streak`,
+
+  // the streak lamp (src/lib/streak.ts)
+  yourStreak: 'Your daily streak',
+  theirStreak: (name: string) => `${name}’s daily streak`,
+  streakDays: (n: number) => `${n} ${n === 1 ? 'day' : 'days'}`,
+  flames: { ember: 'Ember', gold: 'Gold', emerald: 'Emerald', sky: 'Sky', sapphire: 'Sapphire', violet: 'Violet', glory: 'Glory' } as Record<FlameId, string>,
+  flameLine: (flame: string, next: number | null) => (next ? `${flame} flame · new color at ${next}` : `${flame} flame · the brightest`),
+  lampOut: 'Write a note to light the lamp',
+  lampOutTheirs: 'The lamp is out',
+  keepLit: 'Write today to keep it burning',
+  lampLit: 'Your lamp is lit!',
+  newFlame: (flame: string) => `New flame: ${flame}!`,
+  lampStoke: 'Stoke the flame',
+  lampShake: 'Shake the lamp',
+  lampLabel: (n: number, flame: string | null) => (flame ? `Daily streak: ${n} ${n === 1 ? 'day' : 'days'}, ${flame} flame` : 'Daily streak: the lamp is out'),
+
+  // a tree left alone loses its leaves
+  wilting: (days: number) =>
+    days >= LEAVES_GONE_DAYS
+      ? `No notes for ${days} days — the leaves have fallen. One note brings them back.`
+      : `No notes for ${days} days — your tree is losing its leaves. Write one to bring them back.`,
+  wiltingTheirs: (name: string) => `${name}’s tree is losing its leaves.`,
   theirProgress: (name: string) => `${name}’s progress`,
   statGrowth: 'growth',
   statNotes: 'notes',
@@ -158,6 +182,14 @@ const en = {
   pickTitle: 'Choose your tree',
   keepOak: 'Keep the oak',
   close: 'Close',
+
+  // Menu → Updates (the notices themselves are in src/lib/updates.ts)
+  updatesKicker: 'Update notice',
+  updatesTitle: 'What’s new in Rooted',
+  updatesGreeting: 'Dear friend, here is what has grown in Rooted lately.',
+  updatesNew: 'New',
+  updatesSignoff: 'Thank you for writing, and for growing with us.',
+  updatesRollUp: 'Roll up the scroll',
   pickFirstBlurb: 'Every note you write helps it grow. You can switch any time.',
   pickBlurb: 'Your growth stays the same — only the kind of tree changes.',
   growing: 'growing',
@@ -288,6 +320,7 @@ const tl: Strings = {
   myTree: 'Aking puno',
   chooseTree: 'Pumili ng puno',
   installApp: 'I-install ang app',
+  updatesMenu: 'Mga update',
   adminUsers: 'Admin · mga user',
   friends: 'Mga kaibigan',
   noFriends: 'Wala pang ibang nagtanim ng puno. Imbitahan ang isang kaibigan na mag-sign up.',
@@ -305,6 +338,26 @@ const tl: Strings = {
 
   progress: 'Pag-unlad',
   streak: (n) => `${n} araw na sunod-sunod`,
+
+  yourStreak: 'Sunod-sunod mong araw',
+  theirStreak: (name) => `Sunod-sunod na araw ni ${name}`,
+  streakDays: (n) => `${n} araw`,
+  flames: { ember: 'Baga', gold: 'Ginto', emerald: 'Esmeralda', sky: 'Langit', sapphire: 'Sapiro', violet: 'Lila', glory: 'Kaluwalhatian' },
+  flameLine: (flame, next) => (next ? `Apoy na ${flame} · bagong kulay sa ${next}` : `Apoy na ${flame} · pinakamaliwanag`),
+  lampOut: 'Sumulat ng tala para sindihan ang ilawan',
+  lampOutTheirs: 'Patay ang ilawan',
+  keepLit: 'Sumulat ngayon para manatili ang apoy',
+  lampLit: 'Nasindihan ang ilawan mo!',
+  newFlame: (flame) => `Bagong apoy: ${flame}!`,
+  lampStoke: 'Palakasin ang apoy',
+  lampShake: 'Alugin ang ilawan',
+  lampLabel: (n, flame) => (flame ? `Sunod-sunod na araw: ${n}, apoy na ${flame}` : 'Sunod-sunod na araw: patay ang ilawan'),
+
+  wilting: (days) =>
+    days >= LEAVES_GONE_DAYS
+      ? `${days} araw nang walang tala — nalagas na ang mga dahon. Isang tala lang at babalik ang mga ito.`
+      : `${days} araw nang walang tala — nalalagas ang mga dahon ng puno mo. Sumulat para bumalik ang mga ito.`,
+  wiltingTheirs: (name) => `Nalalagas ang mga dahon ng puno ni ${name}.`,
   theirProgress: (name) => `Pag-unlad ni ${name}`,
   statGrowth: 'paglago',
   statNotes: 'tala',
@@ -436,6 +489,14 @@ const tl: Strings = {
   pickTitle: 'Piliin ang iyong puno',
   keepOak: 'Roble na lang',
   close: 'Isara',
+
+  updatesKicker: 'Paunawa sa update',
+  updatesTitle: 'Ano ang bago sa Rooted',
+  updatesGreeting: 'Mahal na kaibigan, narito ang mga bagong tumubo sa Rooted nitong mga nakaraang araw.',
+  updatesNew: 'Bago',
+  updatesSignoff: 'Salamat sa pagsusulat, at sa paglago kasama namin.',
+ 
+  updatesRollUp: 'Irolyo ang balumbon',
   pickFirstBlurb: 'Bawat talang isusulat mo ay tumutulong sa paglago nito. Puwede kang magpalit kahit kailan.',
   pickBlurb: 'Hindi magbabago ang iyong paglago — ang uri lang ng puno ang mapapalitan.',
   growing: 'pinalalago',

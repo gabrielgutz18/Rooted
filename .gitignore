@@ -8,6 +8,11 @@ dist/
 .env.*
 !.env.example
 
+# browser tests (npm run test:e2e): results, report and screenshots are made fresh each run
+test-results/
+playwright-report/
+e2e/screenshots/
+
 # Supabase CLI local state
 supabase/.temp/
 supabase/.branches/
