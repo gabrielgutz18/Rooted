@@ -33,7 +33,14 @@ the days in a row with at least one note (today only breaks the streak once it's
 its fire changes colour as the streak grows: orange (Ember), then gold at 10 days, green at 20,
 sky blue at 30, deep blue at 50, violet at 100 and white Glory at 200. When a note makes the
 streak longer, the lamp flares up and throws sparks, and reaching a new colour says so.
-With no streak the lamp is out. Friends' trees show their lamp too.
+With no streak the lamp is out.
+
+Every tree also has a small wooden lamp post in the grass, the lantern hanging from it on a
+chain: yours, and your friends' (theirs with no name or numbers, just their fire's colour).
+Press it to swing the lantern and stoke the fire; at night it lights the ground
+(`src/components/LampPost.tsx`). The × on the card hides it, leaving a small chip with your
+streak to bring it back (remembered in that browser); a new streak day is then announced over
+your lamp post instead. The lantern and its fire are shared in `src/components/lantern.ts`.
 
 A tree left alone loses its leaves: they stay full for 2 days after the last note, then dry
 to brown and fall, and the branches are bare by day 14. It's only how the tree looks: no growth

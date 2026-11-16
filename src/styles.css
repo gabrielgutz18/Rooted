@@ -704,6 +704,175 @@ p {
   100% { opacity: 0; transform: translate(var(--pop-x), 0) rotate(-1.2deg); }
 }
 
+.lamp-hide {
+  position: absolute;
+  top: 4px;
+  right: 6px;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: 0;
+  font-family: var(--font-px);
+  font-size: 18px;
+  line-height: 1;
+  color: #7a5630;
+  background: none;
+  cursor: pointer;
+  pointer-events: auto; /* the card lets clicks through; this button doesn't */
+}
+.lamp-hide:hover,
+.lamp-hide:focus-visible {
+  color: var(--paper-ink);
+  background: rgb(120 80 30 / 0.14);
+}
+.lamp-hide:focus-visible {
+  outline: 2px solid var(--paper-ink);
+}
+/* with the card hidden, a small chip in its place brings it back */
+.streak-show {
+  position: absolute;
+  top: 16px;
+  right: 18px;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 12px;
+  border: 0;
+  font-family: var(--font-px);
+  font-size: 15px;
+  color: #3b2716;
+  background: #f2e3bd;
+  box-shadow: 0 0 0 3px #2a1a10, 3px 4px 0 3px rgb(16 8 20 / 0.3);
+  cursor: pointer;
+}
+.streak-show:hover {
+  background: #fbefcf;
+}
+.streak-show:focus-visible {
+  outline: 3px dashed #fff6c8;
+  outline-offset: 4px;
+}
+.streak-show-dot {
+  width: 8px;
+  height: 10px;
+  background: var(--flame);
+  box-shadow: 0 0 6px var(--flame);
+}
+
+/* ---------- the lamp post: the lantern on a small wooden post beside the tree ---------- */
+.lamp-post {
+  --px: 3px; /* CSS pixels per art pixel */
+  --flame: #6a5a48;
+  --flame-hi: #8a7a66;
+  position: absolute;
+  right: 9%;
+  /* the ground is 15% up from the bottom; the foot of the post stands a little into it */
+  bottom: calc(15% - 3 * var(--px));
+  width: calc(var(--post-w) * var(--px));
+  height: calc(var(--post-h) * var(--px));
+  padding: 0;
+  border: 0;
+  background: none;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+.lamp-post canvas {
+  display: block;
+  image-rendering: pixelated;
+}
+.post-wood {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+/* the chain and lantern hang from the hook, and swing from it */
+.post-hang {
+  position: absolute;
+  left: calc(var(--hook-x) * var(--px));
+  top: calc((var(--hook-y) + 1) * var(--px));
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  transform-origin: 50% 0;
+  translate: -50% 0;
+}
+.post-chain {
+  width: calc(3 * var(--px));
+  height: calc(var(--chain) * var(--px));
+}
+.post-lantern {
+  position: relative;
+  margin-top: calc(-1 * var(--px)); /* its ring hooks onto the last link */
+}
+.post-lantern canvas {
+  position: relative; /* above the shine */
+  width: calc(17 * var(--px));
+  height: calc(26 * var(--px));
+  filter: drop-shadow(0 0 5px var(--flame));
+}
+.lamp-post:hover .post-lantern canvas,
+.lamp-post:focus-visible .post-lantern canvas {
+  filter: drop-shadow(0 0 9px var(--flame-hi)) drop-shadow(0 0 3px var(--flame));
+}
+.lamp-post.is-out .post-lantern canvas {
+  filter: none;
+}
+.lamp-post:focus-visible {
+  outline: 3px dashed #fff6c8;
+  outline-offset: 4px;
+}
+/* what a new streak day says, over the post (when the card is hidden) */
+.post-pop {
+  top: auto;
+  bottom: calc(100% + 10px);
+  left: calc(var(--hook-x) * var(--px));
+}
+/* the light it throws on the ground: faint by day, a warm pool at night */
+.post-pool {
+  position: absolute;
+  left: calc(var(--hook-x) * var(--px));
+  bottom: calc(3 * var(--px)); /* the ground line */
+  width: calc(56 * var(--px));
+  height: calc(12 * var(--px));
+  border-radius: 50%;
+  background: radial-gradient(ellipse, color-mix(in srgb, var(--flame-hi) 70%, transparent) 0%, transparent 70%);
+  opacity: 0;
+  /* shineOut() animates transform as translate(-50%, -50%) scale(…); the extra
+     translate puts the ellipse's centre on the ground line */
+  transform: translate(-50%, -50%);
+  translate: 0 100%;
+  pointer-events: none;
+}
+.hero-dusk .post-pool {
+  opacity: 0.5;
+}
+.hero-night .post-pool {
+  opacity: 0.9;
+}
+.lamp-post.is-out .post-pool {
+  display: none;
+}
+/* the wood and iron dim with the daylight; the fire doesn't */
+.hero-dawn .post-wood,
+.hero-dawn .post-chain {
+  filter: brightness(0.9) sepia(0.15);
+}
+.hero-dusk .post-wood,
+.hero-dusk .post-chain {
+  filter: brightness(0.75) sepia(0.25) hue-rotate(-10deg);
+}
+.hero-night .post-wood,
+.hero-night .post-chain {
+  filter: brightness(0.42) saturate(0.7) hue-rotate(15deg);
+}
+.hero-night .post-lantern canvas {
+  filter: drop-shadow(0 0 10px var(--flame)) drop-shadow(0 0 3px var(--flame-hi));
+}
+.hero-night .lamp-post.is-out .post-lantern canvas {
+  filter: brightness(0.5);
+}
+
 /* On phones the tree sits bottom-centre, so the status card moves up out of its way. */
 @media (max-width: 860px) {
   .hero-hud {
@@ -725,6 +894,19 @@ p {
   .lamp-art canvas {
     width: 34px;
     height: 52px;
+  }
+  /* a friend's tree has no card in the corner, so the status card keeps its full width */
+  .hero.is-visiting .hero-hud {
+    width: min(320px, calc(100% - 32px));
+  }
+  .lamp-post {
+    --px: 2px;
+    right: 5%;
+  }
+  .streak-show {
+    top: 58px;
+    right: 12px;
+    font-size: 13px;
   }
   .lamp-shine {
     width: 96px;

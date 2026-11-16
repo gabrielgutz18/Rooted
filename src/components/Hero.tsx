@@ -1,9 +1,21 @@
-import { useEffect, useImperativeHandle, useRef, useState, type Ref } from 'react';
+import { useEffect, useImperativeHandle, useRef, useState, type CSSProperties, type Ref } from 'react';
 import { Scene, type Period } from '../scene/engine';
 import { stageFor, VERSES } from '../lib/growth';
 import { useT } from '../lib/i18n';
-import { barenessFor } from '../lib/streak';
+import { barenessFor, flameIndex } from '../lib/streak';
 import StreakLamp, { type LampFire } from './StreakLamp';
+import LampPost from './LampPost';
+import { fireColors } from './lantern';
+
+// Whether you've hidden the streak card in the corner (the lamp post stays). Per browser.
+const CARD_KEY = 'rooted.streakCard';
+function cardHiddenAtStart(): boolean {
+  try {
+    return localStorage.getItem(CARD_KEY) === 'hidden';
+  } catch {
+    return false; // blocked storage: the card shows
+  }
+}
 
 export interface HeroHandle {
   /**
@@ -43,7 +55,18 @@ export default function Hero({ points, seed, species, hour, owner, streak, today
   const [banner, setBanner] = useState<{ key: number; stage: number; arrivals: number[] } | null>(null);
   const [verse, setVerse] = useState<{ key: number; index: number } | null>(null);
   const [fire, setFire] = useState<LampFire | null>(null);
+  const [cardHidden, setCardHidden] = useState(cardHiddenAtStart);
   const bare = barenessFor(idle);
+
+  function hideCard(hidden: boolean) {
+    setCardHidden(hidden);
+    try {
+      if (hidden) localStorage.setItem(CARD_KEY, 'hidden');
+      else localStorage.removeItem(CARD_KEY);
+    } catch {
+      // private mode: the choice lasts until the page closes
+    }
+  }
 
   useEffect(() => {
     const s = new Scene(canvasRef.current!, { points, seed, species, hour, bare });
@@ -101,7 +124,11 @@ export default function Hero({ points, seed, species, hour, owner, streak, today
   const shown = verse && t.verses[verse.index];
 
   return (
-    <section className={`hero hero-${period}`} ref={boxRef} aria-label={t.yourTree}>
+    <section
+      className={`hero hero-${period} ${owner ? 'is-visiting' : ''} ${!owner && cardHidden ? 'card-hidden' : ''}`}
+      ref={boxRef}
+      aria-label={t.yourTree}
+    >
       <canvas
         ref={canvasRef}
         className="hero-canvas"
@@ -149,7 +176,26 @@ export default function Hero({ points, seed, species, hour, owner, streak, today
         {bare > 0 && idle != null && <p className="hud-wilt">{owner ? t.wiltingTheirs(owner) : t.wilting(idle)}</p>}
       </div>
 
-      {streak !== undefined && <StreakLamp key={seed} streak={streak} owner={owner} todayDone={todayDone} fire={owner ? null : fire} />}
+      {/* the lamp hangs on a post beside every tree; on your own there's also the streak card,
+          which you can hide (a small chip brings it back) */}
+      {streak !== undefined && <LampPost key={`post-${seed}`} streak={streak} fire={owner ? null : fire} announce={!owner && cardHidden} />}
+      {streak !== undefined &&
+        !owner &&
+        (cardHidden ? (
+          <button
+            type="button"
+            className="streak-show"
+            onClick={() => hideCard(false)}
+            aria-label={t.showStreak}
+            title={t.showStreak}
+            style={{ '--flame': fireColors(flameIndex(streak))?.[1] ?? '#6a5a48' } as CSSProperties}
+          >
+            <span className="streak-show-dot" aria-hidden="true" />
+            {t.streakDays(streak)}
+          </button>
+        ) : (
+          <StreakLamp key={`card-${seed}`} streak={streak} todayDone={todayDone} fire={fire} onHide={() => hideCard(true)} />
+        ))}
 
       {floaters.map((f) => (
         <div key={f.id} className="float-points">

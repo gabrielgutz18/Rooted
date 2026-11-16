@@ -22,12 +22,14 @@ test('the update notice opens as a scroll, with pictures, and stops saying New o
   await link.click();
   const scroll = page.getByRole('dialog', { name: 'What’s new in Rooted' });
   await expect(scroll).toBeVisible();
+  await expect(scroll.getByRole('heading', { name: 'Lamp posts', exact: true })).toBeVisible();
+  await expect(scroll.getByRole('heading', { name: 'Hide the streak card' })).toBeVisible();
   await expect(scroll.getByRole('heading', { name: 'The streak lamp' })).toBeVisible();
   await expect(scroll.getByRole('heading', { name: 'Tap the lamp' })).toBeVisible();
 
   // every screenshot actually loads
   const imgs = scroll.locator('img');
-  expect(await imgs.count()).toBeGreaterThanOrEqual(10);
+  expect(await imgs.count()).toBeGreaterThanOrEqual(14);
   for (const img of await imgs.all()) {
     await img.scrollIntoViewIfNeeded();
     await expect.poll(() => img.evaluate((el: HTMLImageElement) => el.complete && el.naturalWidth)).toBeGreaterThan(0);
@@ -69,5 +71,6 @@ test('the notice reads in Tagalog too', async ({ page }) => {
   await open(page, 'Trial mode · sa browser na ito lang');
   await page.getByRole('button', { name: /^Mga update/ }).click();
   const scroll = page.getByRole('dialog', { name: 'Ano ang bago sa Rooted' });
+  await expect(scroll.getByRole('heading', { name: 'Mga poste ng ilawan', exact: true })).toBeVisible();
   await expect(scroll.getByRole('heading', { name: 'Pindutin ang ilawan' })).toBeVisible();
 });

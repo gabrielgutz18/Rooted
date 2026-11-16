@@ -56,17 +56,20 @@ const en = {
 
   // the streak lamp (src/lib/streak.ts)
   yourStreak: 'Your daily streak',
-  theirStreak: (name: string) => `${name}’s daily streak`,
   streakDays: (n: number) => `${n} ${n === 1 ? 'day' : 'days'}`,
   flames: { ember: 'Ember', gold: 'Gold', emerald: 'Emerald', sky: 'Sky', sapphire: 'Sapphire', violet: 'Violet', glory: 'Glory' } as Record<FlameId, string>,
   flameLine: (flame: string, next: number | null) => (next ? `${flame} flame · new color at ${next}` : `${flame} flame · the brightest`),
   lampOut: 'Write a note to light the lamp',
-  lampOutTheirs: 'The lamp is out',
   keepLit: 'Write today to keep it burning',
   lampLit: 'Your lamp is lit!',
   newFlame: (flame: string) => `New flame: ${flame}!`,
   lampStoke: 'Stoke the flame',
   lampShake: 'Shake the lamp',
+  hideStreak: 'Hide the streak card',
+  showStreak: 'Show the streak card',
+  // a friend's lantern on its lamp post (no name or numbers on screen)
+  postLabel: (flame: string | null) =>
+    flame ? `A lamp post with a ${flame} flame. Press to stoke the fire.` : 'A lamp post with its lamp out. Press to swing it.',
   lampLabel: (n: number, flame: string | null) => (flame ? `Daily streak: ${n} ${n === 1 ? 'day' : 'days'}, ${flame} flame` : 'Daily streak: the lamp is out'),
 
   // a tree left alone loses its leaves
@@ -340,17 +343,19 @@ const tl: Strings = {
   streak: (n) => `${n} araw na sunod-sunod`,
 
   yourStreak: 'Sunod-sunod mong araw',
-  theirStreak: (name) => `Sunod-sunod na araw ni ${name}`,
   streakDays: (n) => `${n} araw`,
   flames: { ember: 'Baga', gold: 'Ginto', emerald: 'Esmeralda', sky: 'Langit', sapphire: 'Sapiro', violet: 'Lila', glory: 'Kaluwalhatian' },
   flameLine: (flame, next) => (next ? `Apoy na ${flame} · bagong kulay sa ${next}` : `Apoy na ${flame} · pinakamaliwanag`),
   lampOut: 'Sumulat ng tala para sindihan ang ilawan',
-  lampOutTheirs: 'Patay ang ilawan',
   keepLit: 'Sumulat ngayon para manatili ang apoy',
   lampLit: 'Nasindihan ang ilawan mo!',
   newFlame: (flame) => `Bagong apoy: ${flame}!`,
   lampStoke: 'Palakasin ang apoy',
   lampShake: 'Alugin ang ilawan',
+  hideStreak: 'Itago ang kard ng streak',
+  showStreak: 'Ipakita ang kard ng streak',
+  postLabel: (flame) =>
+    flame ? `Poste ng ilawan na may apoy na ${flame}. Pindutin para palakasin ang apoy.` : 'Poste ng ilawan na patay ang ilaw. Pindutin para iugoy ito.',
   lampLabel: (n, flame) => (flame ? `Sunod-sunod na araw: ${n}, apoy na ${flame}` : 'Sunod-sunod na araw: patay ang ilawan'),
 
   wilting: (days) =>

@@ -15,6 +15,10 @@ import flame030 from '../assets/updates/flame-030.png';
 import flame050 from '../assets/updates/flame-050.png';
 import flame100 from '../assets/updates/flame-100.png';
 import flame200 from '../assets/updates/flame-200.png';
+import lampPostMine from '../assets/updates/lamp-post-mine.png';
+import lampPostFriend from '../assets/updates/lamp-post-friend.png';
+import lampPostNight from '../assets/updates/lamp-post-night.png';
+import streakCardHidden from '../assets/updates/streak-card-hidden.png';
 
 type Text = Record<Lang, string>;
 
@@ -44,6 +48,49 @@ export interface Update {
 const days = (n: number): Text => ({ en: `${n} ${n === 1 ? 'day' : 'days'}`, tl: `${n} araw` });
 
 export const UPDATES: Update[] = [
+  {
+    id: '2026-11-16-lamp-posts',
+    date: '2026-11-16',
+    title: { en: 'Lamp posts', tl: 'Mga poste ng ilawan' },
+    intro: {
+      en: 'Your lamp now hangs on a little wooden post beside your tree — and so does every friend’s.',
+      tl: 'Nakasabit na ngayon ang iyong ilawan sa isang maliit na posteng kahoy sa tabi ng iyong puno — gayundin ang sa bawat kaibigan.',
+    },
+    sections: [
+      {
+        heading: { en: 'A lamp post by your tree', tl: 'Poste ng ilawan sa tabi ng iyong puno' },
+        text: {
+          en: 'The lantern hangs on a chain from a wooden post in the grass, burning in your streak’s colour. When a note makes your streak longer, it flares up there too.',
+          tl: 'Nakasabit sa kadena ang ilawan mula sa isang posteng kahoy sa damuhan, nagliliyab sa kulay ng iyong sunod-sunod na araw. Kapag humaba ito dahil sa isang tala, lumalagablab din ito roon.',
+        },
+        pictures: [{ src: lampPostMine, alt: { en: 'An oak tree with the streak card in the corner and a lamp post with an orange flame beside it', tl: 'Isang punong roble na may kard ng streak sa sulok at poste ng ilawan na may kahel na apoy sa tabi nito' } }],
+      },
+      {
+        heading: { en: 'Your friends’ lamp posts', tl: 'Ang mga poste ng ilawan ng iyong mga kaibigan' },
+        text: {
+          en: 'Visit a friend’s tree and their lantern hangs on their own post. No names or numbers — just the colour of their fire, so you can see how they’re keeping on.',
+          tl: 'Bisitahin ang puno ng kaibigan at nakasabit ang kanyang ilawan sa sarili niyang poste. Walang pangalan o numero — kulay lang ng kanyang apoy, para makita mo kung paano siya nagpapatuloy.',
+        },
+        pictures: [{ src: lampPostFriend, alt: { en: 'A friend’s cherry tree with a lamp post and a blue Sapphire flame', tl: 'Ang punong sakura ng kaibigan na may poste ng ilawan at asul na apoy na Sapiro' } }],
+      },
+      {
+        heading: { en: 'Swing it, and see it at night', tl: 'Iugoy ito, at tingnan sa gabi' },
+        text: {
+          en: 'Press a lamp post and the lantern swings on its chain while the fire leaps up. After dark the wood fades into the night and the lantern lights the ground around it.',
+          tl: 'Pindutin ang poste at uugoy ang ilawan sa kadena habang lumalaki ang apoy. Pagdilim, naglalaho ang kahoy sa gabi at iniilawan ng ilawan ang lupa sa paligid nito.',
+        },
+        pictures: [{ src: lampPostNight, alt: { en: 'The lamp post at night, its blue flame lighting the ground', tl: 'Ang poste ng ilawan sa gabi, iniilawan ng asul na apoy ang lupa' } }],
+      },
+      {
+        heading: { en: 'Hide the streak card', tl: 'Itago ang kard ng streak' },
+        text: {
+          en: 'Prefer a cleaner view? Press × on the streak card. A small chip with your days stays in its place — press it to bring the card back. Your lamp post keeps burning either way.',
+          tl: 'Gusto mo ng mas malinis na tanaw? Pindutin ang × sa kard ng streak. May maliit na tatak ng iyong mga araw na papalit dito — pindutin ito para ibalik ang kard. Patuloy na nagliliyab ang iyong poste ng ilawan alinman dito.',
+        },
+        pictures: [{ src: streakCardHidden, alt: { en: 'The tree with the streak card hidden: only a small “9 days” chip and the lamp post', tl: 'Ang puno na nakatago ang kard ng streak: isang maliit na tatak na “9 araw” at ang poste ng ilawan na lang' } }],
+      },
+    ],
+  },
   {
     id: '2026-11-16-streak-lamp',
     date: '2026-11-16',
