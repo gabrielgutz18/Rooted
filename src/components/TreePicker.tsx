@@ -55,8 +55,12 @@ function TreeCard({ species, hour, selected, onPick }: { species: Species; hour?
     const s = new Scene(canvas.current!, { points: 2600, seed: `preview-${species.id}`, species: species.id, hour }, { pixel: 1.6, animals: false, tight: true });
     const ro = new ResizeObserver(([e]) => s.resize(e.contentRect.width, e.contentRect.height));
     ro.observe(view.current!);
+    // only the cards in view keep moving
+    const io = new IntersectionObserver(([e]) => s.setActive(e.isIntersecting), { rootMargin: '80px' });
+    io.observe(view.current!);
     return () => {
       ro.disconnect();
+      io.disconnect();
       s.destroy();
     };
   }, [species.id, hour]);

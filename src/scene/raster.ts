@@ -230,6 +230,7 @@ export function limb(
   ax: number, ay: number, bx: number, by: number, ra: number, rb: number,
   ramp: number[], outline: number, L: Light, seed: number, along0: number, birch: boolean,
   pass: 0 | 1, clipTop = -1e9, clipBot = 1e9,
+  streaks?: number[][], // bark in coloured stripes: one dark → light ramp per colour
 ) {
   ra = Math.max(ra, 0.5);
   rb = Math.max(rb, 0.5);
@@ -270,6 +271,14 @@ export function limb(
       const along = along0 + t * len;
       v += (noise2(s * r * 0.6, along * 0.17, seed) - 0.5) * 0.42;
       if (birch && r > 1.6 && noise2(s * r * 0.22 + 3, along * 0.55, seed + 11) > 0.72) v = 0.02;
+      if (streaks && r > 1.6) {
+        // long stripes running along the limb, each a different colour where the bark has peeled
+        const hn = noise2(s * r * 0.34 + 5, along * 0.045, seed + 23);
+        const ramp2 = streaks[Math.floor(hn * streaks.length * 2.2) % streaks.length];
+        const k2 = v * (ramp2.length - 1) + (bayer(x, y) - 0.5) * 0.55;
+        d[i] = v < 0.06 ? ramp[0] : ramp2[k2 <= 0 ? 0 : k2 >= ramp2.length - 1 ? ramp2.length - 1 : Math.round(k2)];
+        continue;
+      }
       const k = v * (n - 1) + (bayer(x, y) - 0.5) * 0.55;
       d[i] = ramp[k <= 0 ? 0 : k >= n - 1 ? n - 1 : Math.round(k)];
     }

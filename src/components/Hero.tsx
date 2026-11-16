@@ -1,5 +1,5 @@
 import { useEffect, useImperativeHandle, useRef, useState, type CSSProperties, type Ref } from 'react';
-import { Scene, type Period } from '../scene/engine';
+import { Scene, type FreeArea, type Period } from '../scene/engine';
 import { stageFor, VERSES } from '../lib/growth';
 import { useT } from '../lib/i18n';
 import { barenessFor, flameIndex } from '../lib/streak';
@@ -15,6 +15,36 @@ function cardHiddenAtStart(): boolean {
   } catch {
     return false; // blocked storage: the card shows
   }
+}
+
+/**
+ * The space the tree can fill without the cards or the lamp post covering it. Things low down
+ * (the stage card on a wide screen, the lamp post) narrow it from the sides; cards up top (the
+ * stage card on a phone) push the tree's crown down, if they sit over the middle of that space.
+ */
+function freeAreaIn(box: HTMLElement): FreeArea {
+  const b = box.getBoundingClientRect();
+  const gap = 6;
+  const rel = (el: Element) => {
+    const r = el.getBoundingClientRect();
+    return { l: r.left - b.left, r: r.right - b.left, t: r.top - b.top, btm: r.bottom - b.top, w: r.width };
+  };
+  const cards = [...box.querySelectorAll('.hero-hud, .lamp-card, .streak-show')].map(rel).filter((r) => r.w > 0);
+  const post = [...box.querySelectorAll('.lamp-post .post-wood, .lamp-post .post-lantern')].map(rel).filter((r) => r.w > 0);
+  const low = cards.filter((r) => r.btm > b.height * 0.45);
+  const high = cards.filter((r) => r.btm <= b.height * 0.45);
+
+  let left = 0, right = b.width, top = 0;
+  for (const r of low)
+    if ((r.l + r.r) / 2 < b.width / 2) left = Math.max(left, r.r + gap);
+    else right = Math.min(right, r.l - gap);
+  // the lantern swings on its chain when pressed, so the leaves keep well clear of the post
+  for (const r of post)
+    if ((r.l + r.r) / 2 < b.width / 2) left = Math.max(left, r.r + gap + r.w * 0.6);
+    else right = Math.min(right, r.l - gap - r.w * 0.6);
+  const mid = (left + right) / 2, reach = (right - left) * 0.2;
+  for (const r of high) if (r.r > mid - reach && r.l < mid + reach) top = Math.max(top, r.btm + gap);
+  return { left, right, top };
 }
 
 export interface HeroHandle {
@@ -75,8 +105,13 @@ export default function Hero({ points, seed, species, hour, owner, streak, today
       onPeriod(p);
     };
     scene.current = s;
-    const ro = new ResizeObserver(([e]) => s.resize(e.contentRect.width, e.contentRect.height));
-    ro.observe(boxRef.current!);
+    const box = boxRef.current!;
+    const ro = new ResizeObserver(() => {
+      s.resize(box.clientWidth, box.clientHeight);
+      s.setFreeArea(freeAreaIn(box));
+    });
+    ro.observe(box);
+    ro.observe(box.querySelector('.hero-hud')!); // it grows when a line is added
     return () => {
       ro.disconnect();
       s.destroy();
@@ -87,6 +122,11 @@ export default function Hero({ points, seed, species, hour, owner, streak, today
   useEffect(() => {
     if (scene.current) scene.current.state = { points, seed, species, hour, bare };
   }, [points, seed, species, hour, bare]);
+
+  // the cards change: showing or hiding the streak card, visiting a friend
+  useEffect(() => {
+    if (scene.current && boxRef.current) scene.current.setFreeArea(freeAreaIn(boxRef.current));
+  }, [cardHidden, owner, streak]);
 
   useImperativeHandle(ref, () => ({
     celebrate({ points: p, stage, arrivals, streakFrom }) {

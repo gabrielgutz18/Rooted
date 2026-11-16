@@ -98,6 +98,9 @@ interface Pal {
   stem: number[];
   flower: number;
   fruit: number;
+  bloom: number;
+  hang: number[];
+  streaks: number[][] | undefined;
   fall: number[][];
   grass: number[];
   flowers: number[];
@@ -118,6 +121,43 @@ export interface SceneOptions {
   tight: boolean; // frame the tree closely (for small previews)
 }
 
+/** The part of the view the tree may fill, clear of the cards and the lamp post (CSS px from the top-left). */
+export interface FreeArea {
+  left: number;
+  right: number;
+  top: number;
+}
+
+/** How high the tree's crown reaches above the ground, and how far it spreads each side, at rest. */
+function crownOf(tree: Tree): { top: number; half: number } {
+  const n = tree.nodes.length;
+  const ang = new Float32Array(n), x0 = new Float32Array(n), y0 = new Float32Array(n), x1 = new Float32Array(n), y1 = new Float32Array(n);
+  let top = 1, half = 1;
+  for (let i = 0; i < n; i++) {
+    const nd = tree.nodes[i], pi = nd.parent;
+    ang[i] = (pi >= 0 ? ang[pi] : 0) + nd.off;
+    x0[i] = pi >= 0 ? x0[pi] + (x1[pi] - x0[pi]) * nd.at : 0;
+    y0[i] = pi >= 0 ? y0[pi] + (y1[pi] - y0[pi]) * nd.at : 0;
+    x1[i] = x0[i] + Math.cos(ang[i]) * nd.len;
+    y1[i] = y0[i] + Math.sin(ang[i]) * nd.len;
+    // a clump's leaves reach a little past its radius
+    top = Math.max(top, -y1[i] + nd.leaf * 1.3);
+    half = Math.max(half, Math.abs(x1[i]) + nd.leaf * 1.3);
+  }
+  return { top, half };
+}
+
+/**
+ * How much of the world (in tree units, top to bottom) the camera shows so the crown fits: its top
+ * about a tenth below the top edge and under any card there, and its sides inside the free space
+ * (`margin` spare; -1 when there's no free area, which keeps the old side room). All in one unit.
+ */
+function fitView(top: number, half: number, H: number, gy: number, freeL: number, freeR: number, freeT: number, margin: number) {
+  const byHeight = Math.max(top * 1.36 + 14, (top * H) / Math.max(10, gy - freeT - 4));
+  const room = margin < 0 ? (freeR - freeL) / 2.3 : Math.max(10, (freeR - freeL) / 2 - margin);
+  return Math.max(byHeight, (half * H) / room);
+}
+
 export class Scene {
   private ctx: CanvasRenderingContext2D;
   private pix = new Pix();
@@ -132,6 +172,8 @@ export class Scene {
   private g = -1;
   private bare = 0;
   private viewH = 0;
+  private free: FreeArea | null = null;
+  private cxNow = -1; // where the trunk stands, in art pixels (eases when the free area moves)
   private seedStr = '';
   private seed = 0;
   private speciesId = '';
@@ -166,8 +208,20 @@ export class Scene {
     this.cssH = Math.max(1, h);
   }
 
+  /** Keep the tree inside this area (the main view only), so cards and the lamp post don't cover it. */
+  setFreeArea(free: FreeArea | null) {
+    this.free = free;
+  }
+
   destroy() {
     cancelAnimationFrame(this.raf);
+    this.raf = 0;
+  }
+
+  /** Stop drawing while off screen (the tree picker has many small scenes), and pick up again. */
+  setActive(on: boolean) {
+    if (!on) return this.destroy();
+    if (!this.raf) this.raf = requestAnimationFrame(this.tick);
   }
 
   /** Sparkles rising around the tree after a note is saved. */
@@ -193,7 +247,7 @@ export class Scene {
     const pal = this.palette(sp, this.period ?? 'day', this.dryLevel());
     const W = this.pix.w, gy = this.pix.h - Math.max(5, Math.round(this.pix.h * 0.15));
     this.particles.push({
-      kind: sp.fallKind, x: c.x - Math.round(W / 2) + rand(-c.r, c.r), y: c.y - gy + rand(-c.r * 0.5, c.r * 0.5),
+      kind: sp.fallKind, x: c.x - (this.cxNow < 0 ? Math.round(W / 2) : Math.round(this.cxNow)) + rand(-c.r, c.r), y: c.y - gy + rand(-c.r * 0.5, c.r * 0.5),
       vx: rand(-3, 4), vy: rand(6, 12), life: 0, max: 60, ramp: pal.fall[(Math.random() * pal.fall.length) | 0],
       phase: rand(0, TAU), spin: rand(1.5, 4) * (Math.random() < 0.5 ? -1 : 1),
     });
@@ -240,6 +294,12 @@ export class Scene {
       stem: gradeAll(STEM, G),
       flower: grade(hex(sp.flower ?? '#ffffff'), G),
       fruit: sp.fruit ? grade(hex(sp.fruit), G) : 0,
+      bloom: sp.bloom && !dk ? grade(hex(sp.bloom), G) : 0, // a drying tree has dropped its flowers
+      hang: sp.hang ? gradeDry(sp.hang.colors) : [],
+      streaks: sp.streaks?.map((h) => {
+        const c = grade(hex(h), G);
+        return [scalec(c, 0.62), scalec(c, 0.82), c, scalec(c, 1.15)];
+      }),
       fall: parch(sp.fall).map((h) => {
         const c = grade(h, G);
         return [scalec(c, 0.7), c, scalec(c, 1.18)];
@@ -271,6 +331,29 @@ export class Scene {
     let out = m.get(period);
     if (!out) m.set(period, (out = gradeSprite(s, GRADE[period])));
     return out;
+  }
+
+  private zoomKey = '';
+  private zoom = 1;
+
+  /**
+   * How far to zoom out the whole land (1 = not at all, down to 0.55): as much as the grown
+   * tree has to shrink below its usual size to fit the free area. Worked out for the size the
+   * tree is growing to, so the pixels don't change size while it grows.
+   */
+  private landZoom(sp: Species, target: number): number {
+    const fa = this.opts.tight ? null : this.free;
+    if (!fa) return 1;
+    const key = `${sp.id}:${this.seed}:${target}:${this.cssW}x${this.cssH}:${fa.left},${fa.right},${fa.top}`;
+    if (key === this.zoomKey) return this.zoom;
+    this.zoomKey = key;
+    const { top, half } = crownOf(buildTree(sp, this.seed, target));
+    // in CSS pixels; the margins are about what the art-pixel ones come to at full size
+    const H = this.cssH, W = this.cssW, gy = H * 0.85;
+    const freeL = clamp(fa.left, 0, W * 0.4), freeR = clamp(fa.right, W * 0.6, W), freeT = clamp(fa.top, 0, gy * 0.5);
+    const usual = top * 1.36 + 14;
+    this.zoom = clamp(usual / fitView(top, half, H, gy, freeL, freeR, freeT, 6 * this.opts.pixel), 0.55, 1);
+    return this.zoom;
   }
 
   private frame(dt: number) {
@@ -305,8 +388,9 @@ export class Scene {
     const tree = buildTree(sp, this.seed, g);
 
     // ----- the pixel grid: whole device pixels per art pixel -----
+    // when the tree has to shrink to fit beside the cards (phones), the whole land zooms out with it
     const dpr = window.devicePixelRatio || 1;
-    const step = Math.max(1, Math.round(this.opts.pixel * dpr));
+    const step = Math.max(1, Math.round(this.opts.pixel * this.landZoom(sp, target) * dpr));
     const W = Math.max(24, Math.ceil((this.cssW * dpr) / step));
     const H = Math.max(24, Math.ceil((this.cssH * dpr) / step));
     const sizeKey = `${W}x${H}x${step}x${dpr}`;
@@ -320,11 +404,30 @@ export class Scene {
     }
     const p = this.pix;
     const gy = H - Math.max(5, Math.round(H * 0.15));
-    const cx = Math.round(W / 2);
+
+    // ----- where the tree stands: in the middle of the space the cards and the lamp post leave -----
+    const k = dpr / step; // art pixels per CSS pixel
+    const fa = this.opts.tight ? null : this.free;
+    const freeL = fa ? clamp(fa.left * k, 0, W * 0.4) : 0;
+    const freeR = fa ? clamp(fa.right * k, W * 0.6, W) : W;
+    const freeT = fa ? clamp(fa.top * k, 0, gy * 0.5) : 0;
+    const wantCx = (freeL + freeR) / 2;
+    if (this.cxNow < 0) this.cxNow = wantCx;
+    this.cxNow += (wantCx - this.cxNow) * Math.min(1, dt * 1.4);
+    if (Math.abs(wantCx - this.cxNow) < 0.3) this.cxNow = wantCx;
+    const cx = Math.round(this.cxNow);
 
     // ----- camera: zoom out as the tree gets taller -----
     // previews leave room around the tree to show its native land
-    const wantView = this.opts.tight ? clamp(tree.S * 1.5 + 22, 46, 400) : clamp(tree.S * 1.3 + 34, 46, 260);
+    // the main view frames the tree by its real crown, so tall birches and wide sakuras fit
+    let wantView: number;
+    if (this.opts.tight) wantView = clamp(tree.S * 1.5 + 22, 46, 400);
+    else {
+      const { top, half } = crownOf(tree);
+      // the crown's top sits about a tenth below the top edge, and below any card up there
+      // and it never spills past the sides of the free space (a few pixels spare for the wind)
+      wantView = clamp(fitView(top, half, H, gy, freeL, freeR, freeT, fa ? 6 : -1), 40, 4000);
+    }
     if (!this.viewH) this.viewH = wantView;
     this.viewH += (wantView - this.viewH) * Math.min(1, dt * 1.4);
     const z = H / this.viewH;
@@ -388,7 +491,7 @@ export class Scene {
       x1[i] = x0[i] + Math.cos(ang[i]) * nd.len;
       y1[i] = y0[i] + Math.sin(ang[i]) * nd.len;
     }
-    const pine = sp.foliage === 'pine', willow = sp.foliage === 'willow';
+    const pine = sp.foliage === 'pine', willow = sp.foliage === 'willow', hang = sp.hang;
     const clumps: ClumpAt[] = [];
     for (let i = 0; i < n; i++) {
       const nd = tree.nodes[i];
@@ -440,14 +543,15 @@ export class Scene {
       const r0 = (tree.nodes[0]?.r0 ?? 0) * rf;
       if (r0 > 2) {
         // the trunk flares out where it meets the ground
-        for (const s of [-1, 1]) limb(p, cx + s * r0 * 1.7, gy + 1, cx, gy - r0 * 1.3, r0 * 0.45, r0 * 0.75, wood, pal.barkOut, L, 5 + s, 0, false, pass);
+        for (const s of [-1, 1])
+          limb(p, cx + s * r0 * 1.7, gy + 1, cx, gy - r0 * 1.3, r0 * 0.45, r0 * 0.75, wood, pal.barkOut, L, 5 + s, 0, false, pass, -1e9, 1e9, g > 0.3 ? pal.streaks : undefined);
       }
       for (let i = 0; i < n; i++) {
         const nd = tree.nodes[i];
         if (nd.len < 0.01) continue;
         limb(
           p, cx + x0[i] * z, gy + y0[i] * z, cx + x1[i] * z, gy + y1[i] * z, nd.r0 * rf, nd.r1 * rf,
-          wood, pal.barkOut, L, nd.ls & 1023, i * 13.7, !!sp.birch && g > 0.3, pass,
+          wood, pal.barkOut, L, nd.ls & 1023, i * 13.7, !!sp.birch && g > 0.3, pass, -1e9, 1e9, g > 0.3 ? pal.streaks : undefined,
         );
       }
     };
@@ -460,6 +564,7 @@ export class Scene {
     } else {
       for (const c of clumps) if (c.back) this.drawClump(c, true, pal, keyBase, style, L, lxs, leafLen, leafWid, ft, gust);
       if (willow) for (const c of clumps) if (c.back) this.drawStrands(c, pal.leavesBack, L, lxs, leafLen, ft, gust, gy, cx);
+      if (hang) for (const c of clumps) if (c.back && stage >= 2) this.drawStrands(c, pal.hang, L, lxs, leafLen, ft, gust, gy, cx, hang.len);
       limbs(0);
       limbs(1);
       if (animals && stage >= 6) {
@@ -483,6 +588,8 @@ export class Scene {
         }
       }
       if (willow) for (const c of clumps) if (!c.back) this.drawStrands(c, pal.leaves, L, lxs, leafLen, ft, gust, gy, cx);
+      if (hang) for (const c of clumps) if (!c.back && stage >= 2) this.drawStrands(c, pal.hang, L, lxs, leafLen, ft, gust, gy, cx, hang.len);
+      if (pal.bloom && stage >= 3) for (const c of clumps) if (!c.back && c.r >= 3 && c.ls % 3 !== 0) this.drawBlooms(c, pal.bloom, gust, ft);
       // birds resting on top of the leaves
       if (animals && stage >= 3) {
         const front = clumps.filter((c) => !c.back);
@@ -708,13 +815,14 @@ export class Scene {
   /** Willow: strands of leaves hanging from each tip, swinging like pendulums. */
   private drawStrands(
     c: ClumpAt, ramp: number[], L: Light, lxs: number, leafLen: number, t: number, gust: (x: number) => number, gy: number, cx: number,
+    lenK = 1,
   ) {
     const p = this.pix, n = ramp.length;
     const cnt = Math.min(6, 2 + (c.r >> 1));
     for (let k = 0; k < cnt; k++) {
       const hh = h2(c.ls, k), hv = h2(c.ls, k + 50), hl = h2(c.ls, k + 99);
       const sx = c.x + (hh - 0.5) * c.r * 1.6, sy = c.y + (hv - 0.3) * c.r * 0.6;
-      const len = Math.min(c.r * (2.4 + hl * 2.6), gy - 3 - sy);
+      const len = Math.min(c.r * (2.4 + hl * 2.6) * lenK, gy - 3 - sy);
       if (len < 2) continue;
       const ph = hh * TAU;
       const gs = gust(sx);
@@ -731,6 +839,28 @@ export class Scene {
         if (fl > 0.94 - gs * 0.2) idx = n - 1;
         const a32 = 8 + Math.round(swing * 0.25 * f + fl * 1.2); // 8/32 of a turn = pointing down
         stamp(p, leafMask(leafLen, leafLen * 0.42, a32, lxs), x, y, ramp, idx);
+      }
+    }
+  }
+
+  /** Big flowers sitting on the top of a clump: a few petals round a pale heart. */
+  private drawBlooms(c: ClumpAt, col: number, gust: (x: number) => number, t: number) {
+    const p = this.pix, shade = scalec(col, 0.78), heart = mixc(col, hex('#f4d860'), 0.55);
+    const cnt = Math.min(3, 1 + (c.r >> 3));
+    const big = c.r >= 7;
+    for (let k = 0; k < cnt; k++) {
+      const a = -Math.PI * (0.15 + 0.7 * h2(c.ls, k + 200)); // on the upper half, where they catch the light
+      const rr = c.r * (0.35 + 0.45 * h2(c.ls, k + 230));
+      const bx = Math.round(c.x + Math.cos(a) * rr + Math.sin(t * 1.3 + k + c.ls) * 0.4 * gust(c.x));
+      const by = Math.round(c.y + Math.sin(a) * rr * c.squash);
+      if (big) {
+        for (const [dx, dy] of [[-1, -1], [0, -1], [1, -1], [-2, 0], [-1, 0], [1, 0], [2, 0], [-1, 1], [0, 1], [1, 1]]) p.put(bx + dx, by + dy, dy > 0 ? shade : col);
+        p.put(bx, by, heart);
+      } else {
+        p.put(bx, by - 1, col);
+        p.put(bx - 1, by, col);
+        p.put(bx + 1, by, shade);
+        p.put(bx, by, heart);
       }
     }
   }
@@ -845,7 +975,8 @@ export class Scene {
       const [kind, sprite, speed] = want[this.walkers.length];
       const dir = Math.random() < 0.5 ? 1 : -1;
       // they wander in from the edge of the screen
-      this.walkers.push({ kind, sprite, speed, dir: dir as 1 | -1, x: -dir * (W / 2 + 20), walking: true, timer: rand(5, 9) });
+      const cx = this.cxNow < 0 ? W / 2 : this.cxNow;
+      this.walkers.push({ kind, sprite, speed, dir: dir as 1 | -1, x: dir === 1 ? -(cx + 20) : W - cx + 20, walking: true, timer: rand(5, 9) });
     }
     if (this.walkers.length > want.length) this.walkers.length = want.length;
     for (const a of this.walkers) {
@@ -857,9 +988,10 @@ export class Scene {
       }
       if (a.walking) {
         a.x += a.dir * a.speed * dt;
-        const lim = W / 2 - 10;
-        if (a.x > lim) a.dir = -1;
-        if (a.x < -lim) a.dir = 1;
+        // walkers' x is measured from the trunk, which isn't always in the middle
+        const cx = this.cxNow < 0 ? W / 2 : this.cxNow;
+        if (a.x > W - cx - 10) a.dir = -1;
+        if (a.x < 10 - cx) a.dir = 1;
       }
     }
 

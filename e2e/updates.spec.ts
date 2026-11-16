@@ -22,6 +22,7 @@ test('the update notice opens as a scroll, with pictures, and stops saying New o
   await link.click();
   const scroll = page.getByRole('dialog', { name: 'What’s new in Rooted' });
   await expect(scroll).toBeVisible();
+  await expect(scroll.getByRole('heading', { name: 'Twelve new trees', exact: true })).toBeVisible();
   await expect(scroll.getByRole('heading', { name: 'Lamp posts', exact: true })).toBeVisible();
   await expect(scroll.getByRole('heading', { name: 'Hide the streak card' })).toBeVisible();
   await expect(scroll.getByRole('heading', { name: 'The streak lamp' })).toBeVisible();
@@ -29,7 +30,7 @@ test('the update notice opens as a scroll, with pictures, and stops saying New o
 
   // every screenshot actually loads
   const imgs = scroll.locator('img');
-  expect(await imgs.count()).toBeGreaterThanOrEqual(14);
+  expect(await imgs.count()).toBeGreaterThanOrEqual(32);
   for (const img of await imgs.all()) {
     await img.scrollIntoViewIfNeeded();
     await expect.poll(() => img.evaluate((el: HTMLImageElement) => el.complete && el.naturalWidth)).toBeGreaterThan(0);
@@ -39,6 +40,23 @@ test('the update notice opens as a scroll, with pictures, and stops saying New o
   await page.screenshot({ path: `${SHOTS}/1-scroll-top.png` });
   await scroll.getByRole('heading', { name: 'Seven flames to reach' }).scrollIntoViewIfNeeded();
   await page.screenshot({ path: `${SHOTS}/2-scroll-flames.png` });
+
+  // the twelve new trees' lands, each with its name under it
+  const newLands = scroll.locator('.scroll-section', { has: page.getByRole('heading', { name: 'Twelve new trees, twelve new lands' }) });
+  await expect(newLands.locator('figcaption')).toHaveText([
+    'Argentina', 'Mindanao', 'Socotra, Yemen', 'Madagascar', 'India', 'The southern United States',
+    'Colorado', 'Iran', 'Tanzania', 'Eastern China', 'Brazil', 'Chile',
+  ]);
+  await newLands.scrollIntoViewIfNeeded();
+  await page.waitForTimeout(300);
+  await page.screenshot({ path: `${SHOTS}/5-scroll-new-trees.png` });
+
+  // the seven native lands, each with its name under it
+  const lands = scroll.locator('.scroll-section', { has: page.getByRole('heading', { name: 'Each tree in its own land' }) });
+  await expect(lands.locator('figcaption')).toHaveText(['England', 'Japan', 'Canada', 'Kazakhstan', 'Russia and Finland', 'China', 'The Philippines']);
+  await lands.scrollIntoViewIfNeeded();
+  await page.waitForTimeout(300);
+  await page.screenshot({ path: `${SHOTS}/4-scroll-lands.png` });
 
   await page.keyboard.press('Escape');
   await expect(scroll).toBeHidden();

@@ -7,7 +7,25 @@ import lampNewFlame from '../assets/updates/lamp-new-flame.png';
 import lampStoked from '../assets/updates/lamp-stoked.png';
 import leavesFalling from '../assets/updates/leaves-falling.png';
 import friendLamp from '../assets/updates/friend-lamp.png';
-import mapleCanada from '../assets/updates/maple-canada.png';
+import landOak from '../assets/updates/land-oak.png';
+import landSakura from '../assets/updates/land-sakura.png';
+import landMaple from '../assets/updates/land-maple.png';
+import landApple from '../assets/updates/land-apple.png';
+import landBirch from '../assets/updates/land-birch.png';
+import landWillow from '../assets/updates/land-willow.png';
+import landPine from '../assets/updates/land-pine.png';
+import landJacaranda from '../assets/updates/land-jacaranda.png';
+import landEucalyptus from '../assets/updates/land-eucalyptus.png';
+import landSocotra from '../assets/updates/land-socotra.png';
+import landPoinciana from '../assets/updates/land-poinciana.png';
+import landGoldenshower from '../assets/updates/land-goldenshower.png';
+import landMagnolia from '../assets/updates/land-magnolia.png';
+import landSpruce from '../assets/updates/land-spruce.png';
+import landSilktree from '../assets/updates/land-silktree.png';
+import landBaobab from '../assets/updates/land-baobab.png';
+import landGinkgo from '../assets/updates/land-ginkgo.png';
+import landTrumpet from '../assets/updates/land-trumpet.png';
+import landMonkeypuzzle from '../assets/updates/land-monkeypuzzle.png';
 import flame001 from '../assets/updates/flame-001.png';
 import flame010 from '../assets/updates/flame-010.png';
 import flame020 from '../assets/updates/flame-020.png';
@@ -46,8 +64,46 @@ export interface Update {
 }
 
 const days = (n: number): Text => ({ en: `${n} ${n === 1 ? 'day' : 'days'}`, tl: `${n} araw` });
+const cap = (s: string) => s[0].toUpperCase() + s.slice(1);
 
 export const UPDATES: Update[] = [
+  {
+    id: '2026-11-16-more-trees',
+    date: '2026-11-16',
+    title: { en: 'Twelve new trees', tl: 'Labindalawang bagong puno' },
+    intro: {
+      en: 'There are twelve more trees to choose from, and each one grows in its own native land.',
+      tl: 'Labindalawa pang puno ang mapagpipilian, at bawat isa ay lumalago sa sarili nitong katutubong lupain.',
+    },
+    sections: [
+      {
+        heading: { en: 'Twelve new trees, twelve new lands', tl: 'Labindalawang bagong puno, labindalawang bagong lupain' },
+        text: {
+          en: 'The jacaranda now grows in Argentina, the rainbow eucalyptus by the sea in Mindanao, the Socotra tree below the cliffs of its island home, the royal poinciana on the red hills of Madagascar, the golden shower in India, the magnolia in the southern United States, the blue spruce below Colorado’s mountains, the Persian silk tree in Iran, the baobab in sight of Kilimanjaro, the ginkgo among the granite peaks of eastern China, the pink trumpet by the bay of Rio in Brazil, and the monkey puzzle beneath Chile’s volcanoes. Choose a tree from the menu to visit its land.',
+          tl: 'Tumutubo na ngayon ang jacaranda sa Argentina, ang bagras sa tabing-dagat ng Mindanao, ang puno ng Socotra sa paanan ng mga talampas ng isla nito, ang arbol de fuego sa mapupulang burol ng Madagascar, ang golden shower sa India, ang magnolia sa timog ng Estados Unidos, ang asul na spruce sa paanan ng mga bundok ng Colorado, ang Persian silk sa Iran, ang baobab na tanaw ang Kilimanjaro, ang ginkgo sa gitna ng mga batong tuktok ng silangang Tsina, ang rosas na trumpeta sa tabi ng look ng Rio sa Brazil, at ang monkey puzzle sa paanan ng mga bulkan ng Chile. Pumili ng puno sa menu para bisitahin ang lupain nito.',
+        },
+        row: true,
+        pictures: [
+          [landJacaranda, 'jacaranda', 'Argentina', 'jacaranda', 'Argentina'],
+          [landEucalyptus, 'rainbow eucalyptus', 'Mindanao', 'bagras', 'Mindanao'],
+          [landSocotra, 'Socotra tree', 'Socotra, Yemen', 'puno ng Socotra', 'Socotra, Yemen'],
+          [landPoinciana, 'royal poinciana', 'Madagascar', 'arbol de fuego', 'Madagascar'],
+          [landGoldenshower, 'golden shower tree', 'India', 'golden shower', 'India'],
+          [landMagnolia, 'magnolia', 'the southern United States', 'magnolia', 'timog ng Estados Unidos'],
+          [landSpruce, 'blue spruce', 'Colorado', 'asul na spruce', 'Colorado'],
+          [landSilktree, 'Persian silk tree', 'Iran', 'Persian silk', 'Iran'],
+          [landBaobab, 'baobab', 'Tanzania', 'baobab', 'Tanzania'],
+          [landGinkgo, 'ginkgo', 'eastern China', 'ginkgo', 'silangang Tsina'],
+          [landTrumpet, 'pink trumpet tree', 'Brazil', 'rosas na trumpeta', 'Brazil'],
+          [landMonkeypuzzle, 'monkey puzzle', 'Chile', 'monkey puzzle', 'Chile'],
+        ].map(([src, tree, en, treeTl, tl]) => ({
+          src,
+          label: { en: cap(en), tl: cap(tl) },
+          alt: { en: `The ${tree} in its native land, ${en}`, tl: `Ang ${treeTl} sa katutubong lupain nito, ${tl}` },
+        })),
+      },
+    ],
+  },
   {
     id: '2026-11-16-lamp-posts',
     date: '2026-11-16',
@@ -174,10 +230,23 @@ export const UPDATES: Update[] = [
       {
         heading: { en: 'Each tree in its own land', tl: 'Bawat puno sa sariling lupain' },
         text: {
-          en: 'The oak grows in the English countryside, the sakura in Japan, the maple below Canada’s mountains, the pine in the Philippines, and more. Choose a tree from the menu to visit its land.',
-          tl: 'Sa kanayunan ng Inglatera tumutubo ang roble, sa Hapon ang sakura, sa paanan ng mga bundok ng Canada ang maple, sa Pilipinas ang pino, at iba pa. Pumili ng puno sa menu para bisitahin ang lupain nito.',
+          en: 'The oak grows in the English countryside, the sakura below Mt Fuji in Japan, the maple by Canada’s lakes and mountains, the apple in Kazakhstan’s orchards, the birch in the forests of Russia and Finland, the willow by a river in China, and the pine on the rice terraces of the Philippines. Choose a tree from the menu to visit its land.',
+          tl: 'Sa kanayunan ng Inglatera tumutubo ang roble, sa paanan ng Bundok Fuji sa Hapon ang sakura, sa tabi ng mga lawa at bundok ng Canada ang maple, sa mga taniman ng Kazakhstan ang mansanas, sa mga kagubatan ng Rusya at Finland ang birch, sa tabi ng ilog sa Tsina ang willow, at sa mga hagdan-hagdang palayan ng Pilipinas ang pino. Pumili ng puno sa menu para bisitahin ang lupain nito.',
         },
-        pictures: [{ src: mapleCanada, alt: { en: 'A maple tree in front of snowy Canadian mountains', tl: 'Isang punong maple sa harap ng maniyebeng bundok ng Canada' } }],
+        row: true,
+        pictures: [
+          [landOak, 'oak', 'England', 'Roble', 'Inglatera'],
+          [landSakura, 'sakura', 'Japan', 'Sakura', 'Hapon'],
+          [landMaple, 'maple', 'Canada', 'Maple', 'Canada'],
+          [landApple, 'apple', 'Kazakhstan', 'Mansanas', 'Kazakhstan'],
+          [landBirch, 'birch', 'Russia and Finland', 'Birch', 'Rusya at Finland'],
+          [landWillow, 'willow', 'China', 'Willow', 'Tsina'],
+          [landPine, 'pine', 'the Philippines', 'Pino', 'Pilipinas'],
+        ].map(([src, tree, en, treeTl, tl]) => ({
+          src,
+          label: { en: en.replace(/^the /, 'The '), tl },
+          alt: { en: `The ${tree} tree in its native land, ${en}`, tl: `Ang punong ${treeTl.toLowerCase()} sa katutubong lupain nito, ${tl}` },
+        })),
       },
     ],
   },

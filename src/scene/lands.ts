@@ -4,8 +4,13 @@
 
 import type { SpeciesId } from './species';
 
-export type Far = 'peaks' | 'rockies' | 'fuji' | 'rolling' | 'taiga' | 'karst' | 'ridges';
-export type Landmark = 'pagoda' | 'spire' | 'yurt' | 'onion' | 'bridge' | 'hut' | 'canoe';
+export type Far =
+  | 'peaks' | 'rockies' | 'fuji' | 'rolling' | 'taiga' | 'karst' | 'ridges'
+  | 'volcano' | 'kilimanjaro' | 'mesa' | 'sugarloaf' | 'spires';
+export type Landmark =
+  | 'pagoda' | 'spire' | 'yurt' | 'onion' | 'bridge' | 'hut' | 'canoe'
+  | 'adobe' | 'vinta' | 'dhow' | 'tranogasy' | 'chhatri' | 'farmhouse' | 'cabin' | 'windcatcher' | 'rondavel'
+  | 'paifang' | 'church' | 'ruka';
 
 export interface Land {
   /** The place, in English (the Tagalog name is in src/lib/i18n.tsx). */
@@ -29,8 +34,10 @@ export interface Land {
   landmark: Landmark;
   /** Where the landmark stands, as a share of the width from the middle (-0.5 … 0.5). */
   landmarkAt: number;
-  /** Mt Fuji's position, for the Japanese backdrop. */
+  /** Where the lone mountain stands (Fuji, a volcano, Kilimanjaro), as for landmarkAt. */
   peakAt?: number;
+  /** The near meadow's colours (dark, mid, light) in a dry land; green if not set. */
+  meadow?: [string, string, string];
 }
 
 const GREEN: [string, string] = ['#4f8a5e', '#3d7250'];
@@ -97,6 +104,115 @@ export const LANDS: Record<SpeciesId, Land> = {
     farTrees: 0.2,
     landmark: 'hut',
     landmarkAt: -0.3,
+  },
+  jacaranda: {
+    name: 'Argentina',
+    far: 'peaks',
+    hills: { base: 0.04, amp: 0.08, freq: 2.4, colors: ['#8aa458', '#76904a'] },
+    farTrees: 0.18,
+    landmark: 'adobe',
+    landmarkAt: -0.3,
+  },
+  eucalyptus: {
+    name: 'Mindanao',
+    far: 'ridges',
+    water: true,
+    hills: { base: 0.01, amp: 0.06, freq: 3, colors: ['#3f9a4a', '#2f8040'] },
+    farTrees: 0.3,
+    landmark: 'vinta',
+    landmarkAt: 0.26,
+  },
+  socotra: {
+    name: 'Socotra, Yemen',
+    far: 'mesa',
+    water: true,
+    hills: { base: 0.01, amp: 0.05, freq: 2.2, colors: ['#b8a070', '#a08a5c'] },
+    farTrees: 0.1,
+    landmark: 'dhow',
+    landmarkAt: -0.26,
+    meadow: ['#a89a5c', '#968a50', '#bcae6c'],
+  },
+  poinciana: {
+    name: 'Madagascar',
+    far: 'rolling',
+    hills: { base: 0.05, amp: 0.1, freq: 2.6, colors: ['#b86a40', '#9c5634'], terraces: true },
+    farTrees: 0.14,
+    landmark: 'tranogasy',
+    landmarkAt: 0.3,
+  },
+  goldenshower: {
+    name: 'India',
+    far: 'rolling',
+    water: true,
+    hills: { base: 0.01, amp: 0.05, freq: 2.4, colors: ['#8eaa50', '#7a9444'] },
+    farTrees: 0.18,
+    landmark: 'chhatri',
+    landmarkAt: -0.27,
+  },
+  magnolia: {
+    name: 'the southern United States',
+    far: 'rolling',
+    hills: { base: 0.03, amp: 0.07, freq: 2, colors: ['#5a9a50', '#4a8644'] },
+    farTrees: 0.24,
+    farPines: 0.35,
+    landmark: 'farmhouse',
+    landmarkAt: 0.3,
+  },
+  spruce: {
+    name: 'Colorado',
+    far: 'rockies',
+    hills: { base: 0.05, amp: 0.1, freq: 2.6, colors: ['#5a8a52', '#4a7646'] },
+    farTrees: 0.34,
+    landmark: 'cabin',
+    landmarkAt: -0.3,
+  },
+  silktree: {
+    name: 'Iran',
+    far: 'volcano',
+    hills: { base: 0.04, amp: 0.08, freq: 2.2, colors: ['#a8a468', '#928e58'] },
+    farTrees: 0.1,
+    landmark: 'windcatcher',
+    landmarkAt: 0.3,
+    peakAt: -0.22,
+    meadow: ['#8aa050', '#788e46', '#9cb25e'],
+  },
+  baobab: {
+    name: 'Tanzania',
+    far: 'kilimanjaro',
+    hills: { base: 0.02, amp: 0.04, freq: 1.8, colors: ['#c0a458', '#a88c48'] },
+    farTrees: 0.07,
+    landmark: 'rondavel',
+    landmarkAt: -0.3,
+    peakAt: 0.18,
+    meadow: ['#b49a50', '#a08844', '#c8b064'],
+  },
+  ginkgo: {
+    name: 'eastern China',
+    far: 'spires',
+    hills: { base: 0.04, amp: 0.1, freq: 2.8, colors: ['#4f8a58', '#3f7650'] },
+    farTrees: 0.2,
+    farPines: 0.4,
+    landmark: 'paifang',
+    landmarkAt: 0.28,
+  },
+  trumpet: {
+    name: 'Brazil',
+    far: 'sugarloaf',
+    water: true,
+    hills: { base: 0.01, amp: 0.06, freq: 2.8, colors: ['#3f9a4a', '#2f8040'] },
+    farTrees: 0.26,
+    landmark: 'church',
+    landmarkAt: 0.28,
+  },
+  monkeypuzzle: {
+    name: 'Chile',
+    far: 'volcano',
+    water: true,
+    hills: { base: 0.01, amp: 0.05, freq: 2.6, colors: ['#4f8a4a', '#3f7840'] },
+    farTrees: 0.26,
+    landmark: 'ruka',
+    landmarkAt: -0.27,
+    peakAt: 0.2,
   },
 };
 

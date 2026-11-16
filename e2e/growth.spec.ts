@@ -10,11 +10,12 @@
 import { expect, test } from '@playwright/test';
 import { seed, type SeedUser } from './seed';
 import { stageFor } from '../src/lib/growth';
+import { SPECIES } from '../src/scene/species';
 
 const SHOTS = 'e2e/screenshots/growth';
 const STREAKS = [10, 20, 30, 50, 100, 200];
 const NAMES = ['Grace', 'Paul', 'Ruth', 'Mark', 'Joy', 'Esther', 'Caleb', 'Hannah', 'Luke', 'Miriam', 'Joel', 'Lydia'];
-const TREES = ['oak', 'sakura', 'maple', 'apple', 'birch', 'willow', 'pine'];
+const TREES = SPECIES.map((s) => s.id);
 
 // a small seeded random, so a run can be repeated with GROWTH_SEED
 function rng(n: number) {

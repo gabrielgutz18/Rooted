@@ -25,6 +25,12 @@ const FAR_COLORS: Record<string, { c: [string, string, string]; haze: number }> 
   ridgeBack: { c: ['#56708e', '#6a86a2', '#86a0b8'], haze: 0.5 },
   ridgeMid: { c: ['#3e6458', '#4c7666', '#62907a'], haze: 0.36 },
   ridgeFront: { c: ['#2e5a44', '#3a6c50', '#4e8660'], haze: 0.24 },
+  volcano: { c: ['#4e5a78', '#68748e', '#8a94aa'], haze: 0.3 },
+  kili: { c: ['#5a6480', '#747e98', '#949cb4'], haze: 0.42 },
+  mesa: { c: ['#8a6a56', '#a8866a', '#c4a484'], haze: 0.38 },
+  sugarloaf: { c: ['#3e5a5a', '#56746e', '#78928a'], haze: 0.26 },
+  spiresBack: { c: ['#5a6c7c', '#72849a', '#90a0b2'], haze: 0.55 },
+  spires: { c: ['#46585e', '#5c7076', '#7a8e90'], haze: 0.32 },
 };
 
 /** lxP: where the light comes from on the hills (-1 left … 1 right). */
@@ -95,6 +101,41 @@ export function buildBackdrop(W: number, H: number, gy: number, stops: [string, 
   // in a narrow view (the picker cards) landmarks move out toward the edges, clear of the tree
   const narrow = W < H * 1.4;
   const aside = (a: number) => (narrow ? Math.sign(a) * Math.max(Math.abs(a), 0.36) : a);
+  /**
+   * A lone mountain at `at`: `hw` half-width and `peak` height (shares of the view height),
+   * sides curving by `pow`, cut flat at `cap` of its height, snow above `snow`.
+   */
+  const cone = (at: number, hw: number, peak: number, pow: number, cap: number, snow: number, colors: keyof typeof FAR_COLORS) => {
+    const fx = cx + aside(at) * W;
+    hw *= H;
+    peak *= H;
+    const topAt = (x: number) => {
+      const d = Math.min(1, Math.abs(x - fx) / hw);
+      return gy - Math.min(peak * Math.pow(1 - d, pow), peak * cap);
+    };
+    farLayer(topAt, colors, fx - hw, fx + hw, (x, y) => {
+      const streak = Math.max(0, noise1(x * 0.32, 9) - 0.45) * H * 0.16;
+      const line = H * (snow + 0.015 * noise1(x * 0.9, 7)) - streak;
+      return gy - y > line;
+    });
+  };
+  /** A row of rounded pillars or domes: heights and widths as shares of the view height. */
+  const humps = (seed: number, minH: number, maxH: number, minW = 0.05, varW = 0.06, gap = 1.3, pow = 0.45) => {
+    const list: { x: number; w: number; h: number }[] = [];
+    for (let x = -H * 0.2, i = 0; x < W + H * 0.2; i++) {
+      const w = H * (minW + h2(i, seed) * varW);
+      list.push({ x: x + w, w, h: H * (minH + h2(i, seed + 1) * (maxH - minH)) });
+      x += w * (gap + h2(i, seed + 2) * 0.9);
+    }
+    return (x: number) => {
+      let best = 0;
+      for (const k of list) {
+        const d = (x - k.x) / k.w;
+        if (Math.abs(d) < 1) best = Math.max(best, k.h * Math.pow(1 - d * d, pow));
+      }
+      return gy - Math.max(best, H * 0.04);
+    };
+  };
   switch (land.far) {
     case 'peaks': {
       const t = (x: number) => gy - H * (0.1 + 0.27 * ridge(U(x)));
@@ -106,47 +147,50 @@ export function buildBackdrop(W: number, H: number, gy: number, stops: [string, 
       farLayer(t, 'stone', 0, W, (x, y, t0) => t0 < gy - H * 0.25 && y - t0 < 2 + noise1(x * 0.6, 5) * 7);
       break;
     }
-    case 'fuji': {
+    case 'fuji':
       farLayer((x) => gy - H * (0.05 + 0.08 * ridge(U(x))), 'stone');
       // Mt Fuji: one wide cone with gently curving sides, a flat top and a snow cap
-      const fx = cx + aside(land.peakAt ?? 0) * W, hw = H * 0.62, peak = H * 0.37;
-      const cone = (x: number) => {
-        const d = Math.min(1, Math.abs(x - fx) / hw);
-        return gy - Math.min(peak * Math.pow(1 - d, 1.55), peak * 0.93);
-      };
-      farLayer(cone, 'fuji', fx - hw, fx + hw, (x, y) => {
-        const streak = Math.max(0, noise1(x * 0.32, 9) - 0.45) * H * 0.16;
-        const line = H * (0.25 + 0.015 * noise1(x * 0.9, 7)) - streak;
-        return gy - y > line;
-      });
+      cone(land.peakAt ?? 0, 0.62, 0.37, 1.55, 0.93, 0.25, 'fuji');
       break;
-    }
     case 'rolling':
       farLayer((x) => gy - H * (0.07 + 0.09 * fbm(U(x) * 1.4 + 5, 41)), 'rolling');
       break;
     case 'taiga':
       farLayer((x) => gy - H * (0.06 + 0.06 * fbm(U(x) * 1.2 + 9, 43)), 'taiga');
       break;
-    case 'karst': {
+    case 'karst':
       // Guilin: steep, rounded limestone pillars, a misty row behind a darker one
-      const humps = (seed: number, minH: number, maxH: number) => {
-        const list: { x: number; w: number; h: number }[] = [];
-        for (let x = -H * 0.2, i = 0; x < W + H * 0.2; i++) {
-          const w = H * (0.05 + h2(i, seed) * 0.06);
-          list.push({ x: x + w, w, h: H * (minH + h2(i, seed + 1) * (maxH - minH)) });
-          x += w * (1.3 + h2(i, seed + 2) * 0.9);
-        }
-        return (x: number) => {
-          let best = 0;
-          for (const k of list) {
-            const d = (x - k.x) / k.w;
-            if (Math.abs(d) < 1) best = Math.max(best, k.h * Math.pow(1 - d * d, 0.45));
-          }
-          return gy - Math.max(best, H * 0.04);
-        };
-      };
       farLayer(humps(71, 0.16, 0.34), 'karstBack');
       farLayer(humps(83, 0.09, 0.22), 'karst');
+      break;
+    case 'sugarloaf':
+      // Rio: great bare granite domes rising straight out of the bay
+      farLayer((x) => gy - H * (0.05 + 0.06 * fbm(U(x) * 1.6 + 7, 45)), 'karstBack');
+      farLayer(humps(97, 0.14, 0.32, 0.07, 0.07, 2.4, 0.6), 'sugarloaf');
+      break;
+    case 'spires':
+      // Huangshan: needles of granite rising out of the mist
+      farLayer((x) => gy - H * (0.12 + 0.24 * Math.pow(ridge(U(x), 2.4, 9), 1.6)), 'spiresBack');
+      farLayer(humps(53, 0.1, 0.28, 0.025, 0.035, 1.6, 0.9), 'spires');
+      break;
+    case 'volcano':
+      // a lone snowy cone over lower ranges (Damavand, Villarrica)
+      farLayer((x) => gy - H * (0.06 + 0.12 * ridge(U(x), 2)), 'stone');
+      cone(land.peakAt ?? 0, 0.48, 0.36, 1.25, 0.96, 0.22, 'volcano');
+      break;
+    case 'kilimanjaro':
+      // a vast, gentle mountain with a flat, snowy top, far across the plain
+      farLayer((x) => gy - H * (0.03 + 0.04 * fbm(U(x) * 1.4 + 3, 49)), 'kili');
+      cone(land.peakAt ?? 0, 0.95, 0.3, 1.05, 0.8, 0.235, 'kili');
+      break;
+    case 'mesa': {
+      // Socotra: flat-topped limestone plateaus with sheer sides
+      const top = (x: number, f: number, o: number, lo: number, hi: number) => {
+        const m = clamp((fbm(U(x) * f + o, 47) - 0.42) * 7, 0, 1);
+        return gy - H * (lo + hi * m + 0.012 * noise1(x * 0.3, 5));
+      };
+      farLayer((x) => top(x, 1.3, 11, 0.08, 0.14), 'karstBack');
+      farLayer((x) => top(x, 2.1, 31, 0.04, 0.11), 'mesa');
       break;
     }
     case 'ridges':
@@ -174,8 +218,9 @@ export function buildBackdrop(W: number, H: number, gy: number, stops: [string, 
   // ----- hills -----
   const hl = land.hills;
   const markX = Math.round(cx + aside(land.landmarkAt) * W);
-  // water lands keep the hills low around the landmark, so the bridge or canoe shows
-  const dip = (x: number) => (land.water ? clamp(Math.abs(x - markX) / (H * 0.14), 0, 1) ** 2 : 1);
+  // a boat or bridge sits on the water: the hills stay low around it so it shows
+  const afloat = !!land.water && FLOATS.includes(land.landmark);
+  const dip = (x: number) => (afloat ? clamp(Math.abs(x - markX) / (H * 0.14), 0, 1) ** 2 : 1);
   const midTop = (x: number) => gy - Math.round(H * (hl.base + hl.amp * fbm(U(x) * hl.freq + 90, 21)) * dip(x));
   const [hA, hB] = gradeAll(hl.colors, G).map((c) => fade(c, 0.24));
   const [tLip, tDark] = gradeAll(['#86c060', '#3f7a38'], G).map((c) => fade(c, 0.22));
@@ -249,7 +294,7 @@ export function buildBackdrop(W: number, H: number, gy: number, stops: [string, 
   }
 
   // ----- the landmark -----
-  drawLandmark(land.landmark, markX, land.water ? gy - Math.round(H * 0.045) : midTop(markX) + u, u, G, fade, put, rect);
+  drawLandmark(land.landmark, markX, afloat ? gy - Math.round(H * 0.045) : midTop(markX) + u, u, G, fade, put, rect);
 
   // ----- a few nearer trees at the back of the meadow -----
   const nearTop = (x: number) => gy - Math.round(H * (0.012 + 0.035 * noise1(U(x) * 4.5 + 7, 31)));
@@ -262,7 +307,7 @@ export function buildBackdrop(W: number, H: number, gy: number, stops: [string, 
   }
 
   // ----- near meadow -----
-  const [mA, mB, mC] = gradeAll(['#6aa84e', '#58963f', '#7cba58'], G);
+  const [mB, mA, mC] = gradeAll(land.meadow ?? ['#58963f', '#6aa84e', '#7cba58'], G);
   for (let x = 0; x < W; x++) {
     const t0 = nearTop(x);
     for (let y = t0; y < gy; y++) {
@@ -304,6 +349,8 @@ export function buildBackdrop(W: number, H: number, gy: number, stops: [string, 
   return { px, skyTop: top };
 }
 
+const FLOATS: Landmark[] = ['bridge', 'canoe', 'vinta', 'dhow'];
+
 /**
  * A small landmark standing on the hills, `u` pixels per block, with its base at (x, yb).
  * Everything fades a little toward the sky, like the hills around it.
@@ -321,6 +368,7 @@ function drawLandmark(
   const col = (h: string) => fade(grade(hex(h), G), 0.18);
   /** A row `w` blocks wide, centred on x, `j` blocks above the base. */
   const row = (w: number, j: number, c: number, h = 1) => rect(x - Math.floor((w * u) / 2), yb - (j + h) * u, w * u, h * u, c);
+  const thin = Math.max(1, u >> 1); // poles and masts
   switch (kind) {
     case 'pagoda': {
       // five-storey pagoda: vermilion walls under dark, upturned roofs
@@ -411,6 +459,190 @@ function drawLandmark(
       rect(x - Math.floor((7 * u) / 2) - u, yb - 2 * u, u, u, redDk);
       rect(x + Math.ceil((7 * u) / 2), yb - 2 * u, u, u, redDk);
       row(1, 1, dark, 2);
+      break;
+    }
+    case 'adobe': {
+      // a whitewashed adobe house with a flat roof, and a tall cardon cactus beside it
+      const wall = col('#ece2cc'), shade = col('#c8b898'), roof = col('#8a6a48'), door = col('#5a3a24'), cac = col('#5a8a42'), cacDk = col('#3a6a30');
+      row(9, 0, wall, 4);
+      rect(x + 2 * u, yb - 4 * u, 3 * u, 4 * u, shade);
+      row(11, 4, roof);
+      rect(x - 3 * u, yb - 3 * u, 2 * u, 3 * u, door);
+      rect(x + u, yb - 3 * u, u, u, door); // a window
+      const kx = x + 7 * u;
+      rect(kx, yb - 10 * u, 2 * u, 10 * u, cac);
+      rect(kx + u, yb - 10 * u, u, 10 * u, cacDk);
+      rect(kx - 2 * u, yb - 5 * u, 2 * u, u, cac);
+      rect(kx - 2 * u, yb - 8 * u, u, 3 * u, cac);
+      rect(kx + 2 * u, yb - 4 * u, 2 * u, u, cacDk);
+      rect(kx + 3 * u, yb - 7 * u, u, 3 * u, cacDk);
+      break;
+    }
+    case 'vinta': {
+      // a vinta: a slim outrigger boat under a sail of bright vertical stripes
+      const hull = col('#7a4a2a'), hullLt = col('#a8703e'), dark = col('#2a2420');
+      const stripes = ['#d8342a', '#f0c030', '#2e9a4a', '#2a6ab8', '#d8342a', '#f0c030'].map(col);
+      rect(x - 8 * u, yb - u, 16 * u, thin, dark); // the outrigger poles
+      row(7, 0, hull);
+      row(10, 1, hullLt);
+      rect(x - 6 * u, yb - 3 * u, u, u, hullLt); // the prows curl up
+      rect(x + 5 * u, yb - 3 * u, u, u, hullLt);
+      rect(x - 2 * u, yb - 12 * u, u, 10 * u, dark); // the mast
+      stripes.forEach((c, i) => rect(x + (i - 1) * u, yb - (11 - (i >> 1)) * u, u, (8 - (i >> 1)) * u, c));
+      break;
+    }
+    case 'dhow': {
+      // a wooden dhow with a high stern and a white lateen sail
+      const hull = col('#8a5a32'), hullDk = col('#5e3a20'), sail = col('#f2ead8'), sailDk = col('#cfc4ac'), dark = col('#2a2420');
+      row(8, 0, hullDk);
+      row(11, 1, hull);
+      rect(x + 4 * u, yb - 3 * u, 2 * u, u, hull); // the high stern
+      rect(x, yb - 11 * u, thin, 9 * u, dark); // the mast
+      for (let i = 0; i < 8 * u; i++) {
+        const w = Math.max(1, Math.round(7 * u * (1 - i / (8 * u))));
+        rect(x - w, yb - 2 * u - 1 - i, w, 1, i < u ? sailDk : sail);
+      }
+      break;
+    }
+    case 'tranogasy': {
+      // a highland house: tall, narrow, red brick, with a steep roof over a wooden veranda
+      const brick = col('#b4523a'), brickDk = col('#86382a'), roof = col('#3a2a28'), wood = col('#e6dccc'), dark = col('#2a2024');
+      row(7, 0, brick, 8);
+      rect(x + 2 * u, yb - 8 * u, Math.ceil(1.5 * u), 8 * u, brickDk);
+      rect(x - 2 * u, yb - 7 * u, u, 2 * u, dark); // upstairs windows
+      rect(x + u, yb - 7 * u, u, 2 * u, dark);
+      row(1, 0, dark, 3); // the door
+      row(9, 4, wood); // the veranda, on thin posts
+      for (const k of [-4, 4]) rect(x + k * u, yb - 4 * u, thin, 4 * u, wood);
+      for (let i = 0; i < 5 * u; i++) {
+        const w = Math.max(1, Math.round(9 * u * (1 - i / (5 * u))));
+        rect(x - Math.floor(w / 2), yb - 8 * u - 1 - i, w, 1, roof);
+      }
+      break;
+    }
+    case 'chhatri': {
+      // a chhatri: a domed pavilion of pale sandstone on a stepped plinth
+      const stone = col('#e4c89a'), stoneDk = col('#b8986a'), dome = col('#f2e6d0'), domeDk = col('#d0c0a2'), dark = col('#6a5040'), gold = col('#e0b040');
+      row(13, 0, stoneDk);
+      row(11, 1, stone);
+      row(9, 2, dark, 4); // the open pavilion, shadowed inside
+      const l0 = x - Math.floor((9 * u) / 2);
+      for (const k of [0, 4, 8]) rect(l0 + k * u, yb - 6 * u, u, 4 * u, stone);
+      row(11, 6, stoneDk); // the eave
+      for (let i = 0; i < 4 * u; i++) {
+        const w = Math.round(7 * u * Math.sqrt(1 - (i / (4 * u)) ** 2));
+        rect(x - Math.floor(w / 2), yb - 7 * u - 1 - i, w, 1, i < u ? domeDk : dome);
+      }
+      row(1, 11, gold, 2); // the finial
+      break;
+    }
+    case 'farmhouse': {
+      // a white clapboard farmhouse with a deep front porch and a brick chimney
+      const white = col('#f2eee6'), shade = col('#c8c2b6'), roof = col('#5a5864'), dark = col('#2e2a30'), brick = col('#8a4a3a');
+      rect(x + 3 * u, yb - 10 * u, u, 3 * u, brick);
+      row(12, 0, white, 6);
+      for (const k of [-4, -1, 2]) rect(x + k * u, yb - 5 * u, u, u, dark); // upstairs windows
+      row(14, 3, roof); // the porch roof
+      for (const k of [-6, -2, 2, 5]) rect(x + k * u, yb - 3 * u, thin, 3 * u, shade);
+      rect(x - u, yb - 2 * u, u, 2 * u, dark); // the door
+      for (let i = 0; i < 3 * u; i++) {
+        const w = Math.max(1, Math.round(13 * u * (1 - i / (3.6 * u))));
+        rect(x - Math.floor(w / 2), yb - 6 * u - 1 - i, w, 1, roof);
+      }
+      break;
+    }
+    case 'cabin': {
+      // a log cabin with a lit window and a stone chimney
+      const log = col('#8e5c34'), logDk = col('#64401f'), roof = col('#3e3430'), stone = col('#9a968e'), dark = col('#2a2220'), lamp = col('#f0c860');
+      rect(x - 4 * u, yb - 8 * u, 2 * u, 4 * u, stone);
+      for (let j = 0; j < 4; j++) row(9, j, j % 2 ? log : logDk);
+      rect(x - u, yb - 3 * u, 2 * u, 3 * u, dark);
+      rect(x + 2 * u, yb - 3 * u, u, u, lamp);
+      for (let i = 0; i < 3 * u; i++) {
+        const w = Math.max(1, Math.round(11 * u * (1 - i / (3.4 * u))));
+        rect(x - Math.floor(w / 2), yb - 4 * u - 1 - i, w, 1, roof);
+      }
+      break;
+    }
+    case 'windcatcher': {
+      // Yazd: a mud-brick house with a low dome and a tall windcatcher tower
+      const mud = col('#dcbc8c'), mudDk = col('#b0905e'), dark = col('#5a4030');
+      row(12, 0, mud, 4);
+      rect(x - 4 * u, yb - 2 * u, u, 2 * u, dark); // the door
+      for (let i = 0; i < 2 * u; i++) {
+        const w = Math.round(5 * u * Math.sqrt(1 - (i / (2 * u)) ** 2));
+        rect(x - 3 * u - Math.floor(w / 2), yb - 4 * u - 1 - i, w, 1, i < u >> 1 ? mudDk : mud);
+      }
+      const tx = x + u;
+      rect(tx, yb - 12 * u, 5 * u, 8 * u, mud);
+      rect(tx + 4 * u, yb - 12 * u, u, 8 * u, mudDk);
+      rect(tx, yb - 13 * u, 5 * u, u, mudDk);
+      for (const k of [1, 3]) rect(tx + k * u, yb - 12 * u, u, 3 * u, dark); // the vents that catch the wind
+      break;
+    }
+    case 'rondavel': {
+      // a round mud hut under a cone of thatch, beside a flat-topped acacia
+      const mud = col('#a8704a'), mudDk = col('#7e5034'), thatch = col('#cca456'), thatchDk = col('#9a7838'), dark = col('#2e2220');
+      const trunk = col('#4a3a2c'), leaf = col('#6a8438'), leafDk = col('#4a6428');
+      row(8, 0, mud, 3);
+      rect(x + 2 * u, yb - 3 * u, 2 * u, 3 * u, mudDk);
+      row(2, 0, dark, 2);
+      for (let i = 0; i < 5 * u; i++) {
+        const w = Math.max(1, Math.round(11 * u * (1 - i / (5 * u))));
+        rect(x - Math.floor(w / 2), yb - 3 * u - 1 - i, w, 1, Math.floor(i / u) % 2 ? thatch : thatchDk);
+      }
+      const ax = x + 10 * u;
+      rect(ax, yb - 7 * u, u, 7 * u, trunk);
+      rect(ax - u, yb - 7 * u, u, u, trunk);
+      rect(ax + u, yb - 7 * u, u, u, trunk);
+      rect(ax - 5 * u, yb - 8 * u, 11 * u, u, leafDk);
+      rect(ax - 5 * u, yb - 9 * u, 11 * u, u, leaf);
+      rect(ax - 3 * u, yb - 10 * u, 7 * u, u, leaf);
+      break;
+    }
+    case 'paifang': {
+      // a paifang: a gateway of red pillars under tiled roofs with upturned eaves
+      const red = col('#c43a2a'), redDk = col('#8a2a22'), roof = col('#2e3a3c'), gold = col('#e0b040');
+      for (const k of [-5, 4]) rect(x + k * u, yb - 9 * u, u, 9 * u, red);
+      for (const k of [-2, 1]) rect(x + k * u, yb - 9 * u, u, 9 * u, redDk);
+      row(11, 6, redDk);
+      row(3, 7, gold); // the name board
+      row(13, 9, roof);
+      const half = Math.floor((13 * u) / 2);
+      rect(x - half, yb - 11 * u, u, u, roof); // the eaves turn up
+      rect(x - half + 12 * u, yb - 11 * u, u, u, roof);
+      row(9, 10, roof);
+      break;
+    }
+    case 'church': {
+      // a white colonial church with two bell towers and golden trim
+      const white = col('#f2eee4'), shade = col('#cfc8b8'), trim = col('#d8a838'), cap = col('#3a5a7a'), dark = col('#2e2a30');
+      for (const k of [-6, 3]) {
+        rect(x + k * u, yb - 10 * u, 3 * u, 10 * u, white);
+        rect(x + k * u + 2 * u, yb - 10 * u, u, 10 * u, shade);
+        rect(x + k * u + u, yb - 8 * u, u, 2 * u, dark); // the belfry
+        rect(x + k * u, yb - 11 * u, 3 * u, u, cap);
+        rect(x + k * u + u, yb - 12 * u, u, u, cap);
+      }
+      row(7, 0, white, 7);
+      row(7, 6, trim);
+      row(5, 7, white);
+      row(3, 8, white);
+      row(1, 9, trim, 2); // the cross
+      rect(x - u, yb - 3 * u, 2 * u, 3 * u, dark);
+      rect(x - Math.floor(u / 2), yb - 5 * u, u, u, dark); // a round window
+      break;
+    }
+    case 'ruka': {
+      // a Mapuche ruka: a low, rounded house thatched down to the ground, smoke curling up
+      const thatch = col('#b49454'), thatchDk = col('#86683a'), thatchLt = col('#ccae6a'), dark = col('#2a2220'), smoke = col('#dfe2e6');
+      const R = 7 * u, hh = 6 * u;
+      for (let i = 0; i < hh; i++) {
+        const w = Math.round(2 * R * Math.sqrt(1 - (i / hh) ** 2));
+        rect(x - Math.floor(w / 2), yb - 1 - i, w, 1, i < u ? thatchDk : i > hh * 0.7 ? thatchLt : thatch);
+      }
+      rect(x - u, yb - 3 * u, 2 * u, 3 * u, dark);
+      for (let k = 0; k < 3; k++) rect(x + Math.round(Math.sin(k * 1.6) * u), yb - hh - (2 + 2 * k) * u, u, u, smoke);
       break;
     }
   }
