@@ -11,6 +11,7 @@ import AuthScreen from './components/AuthScreen';
 import TreePicker from './components/TreePicker';
 import InstallDialog from './components/InstallDialog';
 import { RecoveryDialog, UnlockPanel } from './components/Unlock';
+import UsernameDialog from './components/UsernameDialog';
 import { speciesOf } from './scene/species';
 import { useInstall } from './lib/install';
 import { clearSnapshots, readSnapshot, writeSnapshot } from './lib/cache';
@@ -63,6 +64,7 @@ function Garden({ userId }: { userId: string }) {
   const [menuOpen, setMenuOpen] = useState(false);
   const [picking, setPicking] = useState(false);
   const [installHelp, setInstallHelp] = useState(false);
+  const [nameLater, setNameLater] = useState(false);
   const install = useInstall();
   const askedTree = useRef(false);
   const hero = useRef<HeroHandle>(null);
@@ -217,6 +219,15 @@ function Garden({ userId }: { userId: string }) {
     else setPicking(false);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [me]);
+
+  // Accounts made with an email before usernames pick one once (null: not yet; undefined:
+  // the usernames migration isn't run, so don't ask). The admin keeps the email.
+  const needsName = !!me && !me.is_admin && me.username === null && !nameLater;
+
+  function namePicked(username: string) {
+    setMe((m) => (m ? { ...m, username } : m));
+    setNotice(t.usernameSaved(username));
+  }
 
   const open = !lock || lock.open; // while checking, the copy from last time is shown
   const points = useMemo(() => (open ? entries.reduce((s, e) => s + e.points, 0) : (me?.points ?? 0)), [open, entries, me]);
@@ -393,11 +404,12 @@ function Garden({ userId }: { userId: string }) {
             </section>
           )}
 
-          {view.kind === 'admin' && <Admin onError={setError} />}
+          {view.kind === 'admin' && <Admin selfId={userId} onError={setError} />}
         </div>
       </div>
 
-      {picking && <TreePicker current={me?.tree} first={me?.tree == null} hour={hourParam} onPick={chooseTree} onClose={closePicker} />}
+      {needsName && <UsernameDialog onDone={namePicked} onLater={() => setNameLater(true)} />}
+      {!needsName && picking && <TreePicker current={me?.tree} first={me?.tree == null} hour={hourParam} onPick={chooseTree} onClose={closePicker} />}
       {installHelp && <InstallDialog platform={install.platform} onClose={() => setInstallHelp(false)} />}
       {recovery && <RecoveryDialog key={recovery.code ?? 'new'} code={recovery.code} onClose={closeRecovery} />}
 
@@ -425,9 +437,11 @@ function Stat({ value, label }: { value: string | number; label: string }) {
   );
 }
 
-function Admin({ onError }: { onError(msg: string): void }) {
+function Admin({ selfId, onError }: { selfId: string; onError(msg: string): void }) {
   const t = useT();
   const [users, setUsers] = useState<AdminUser[] | null>(null);
+  const [resetting, setResetting] = useState<string | null>(null);
+  const [issued, setIssued] = useState<{ name: string; password: string } | null>(null);
   const dateFmt = useMemo(() => new Intl.DateTimeFormat(t.locale, { month: 'short', day: 'numeric', year: 'numeric' }), [t.locale]);
 
   useEffect(() => {
@@ -437,6 +451,19 @@ function Admin({ onError }: { onError(msg: string): void }) {
     });
   }, [onError]);
 
+  // A new random password for someone who forgot theirs and has no recovery key to reset it.
+  async function resetFor(u: AdminUser) {
+    if (!window.confirm(t.adminResetConfirm(u.display_name))) return;
+    setResetting(u.id);
+    try {
+      setIssued({ name: u.display_name, password: await backend.adminResetPassword(u.id) });
+    } catch (err) {
+      onError(message(err));
+    } finally {
+      setResetting(null);
+    }
+  }
+
   return (
     <section className="px-panel" aria-labelledby="admin-title">
       <div className="composer-head">
@@ -445,17 +472,29 @@ function Admin({ onError }: { onError(msg: string): void }) {
         </h2>
         <span className="muted">{users ? t.total(users.length) : t.loading}</span>
       </div>
+      {issued && (
+        <div className="form-info" role="status">
+          <p>{t.adminResetDone(issued.name)}</p>
+          <output className="recovery-key">{issued.password}</output>
+          <p className="muted small">{t.adminResetHint}</p>
+          <button className="btn btn-small" onClick={() => setIssued(null)}>
+            {t.close}
+          </button>
+        </div>
+      )}
       <div className="table-wrap">
         <table className="table">
           <thead>
             <tr>
               <th>{t.col.name}</th>
+              <th>{t.col.username}</th>
               <th>{t.col.email}</th>
               <th>{t.col.stage}</th>
               <th className="num">{t.col.growth}</th>
               <th className="num">{t.col.notes}</th>
               <th>{t.col.last}</th>
               <th>{t.col.joined}</th>
+              {cloud && <th>{t.col.password}</th>}
             </tr>
           </thead>
           <tbody>
@@ -464,12 +503,22 @@ function Admin({ onError }: { onError(msg: string): void }) {
                 <td>
                   {u.display_name} {u.is_admin && <span className="tag">admin</span>}
                 </td>
-                <td>{u.email}</td>
+                <td>{u.username ?? '—'}</td>
+                <td>{u.email ?? '—'}</td>
                 <td>{t.stages[stageFor(u.points).index]}</td>
                 <td className="num">{u.points}</td>
                 <td className="num">{u.entry_count}</td>
                 <td>{u.last_entry_at ? dateFmt.format(new Date(u.last_entry_at)) : '—'}</td>
                 <td>{dateFmt.format(new Date(u.created_at))}</td>
+                {cloud && (
+                  <td>
+                    {u.id !== selfId && (
+                      <button className="btn btn-small" disabled={resetting === u.id} onClick={() => resetFor(u)}>
+                        {resetting === u.id ? t.pleaseWait : t.adminReset}
+                      </button>
+                    )}
+                  </td>
+                )}
               </tr>
             ))}
           </tbody>

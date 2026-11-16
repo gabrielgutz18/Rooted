@@ -4,13 +4,15 @@ import { Scene } from '../scene/engine';
 import { errorText, useT } from '../lib/i18n';
 import LangSwitch from './LangSwitch';
 
-/** One short form: name, email, password — and you are in. */
+type Mode = 'signup' | 'signin' | 'reset';
+
+/** One short form: username and password, and you are in. (The admin signs in with email.) */
 export default function AuthScreen() {
   const t = useT();
-  const [mode, setMode] = useState<'signup' | 'signin'>('signup');
-  const [name, setName] = useState('');
-  const [email, setEmail] = useState('');
+  const [mode, setMode] = useState<Mode>('signup');
+  const [login, setLogin] = useState('');
   const [password, setPassword] = useState('');
+  const [recoveryKey, setRecoveryKey] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [confirmSent, setConfirmSent] = useState(false);
@@ -29,6 +31,13 @@ export default function AuthScreen() {
     };
   }, []);
 
+  function switchTo(next: Mode) {
+    setMode(next);
+    setError(null);
+    setConfirmSent(false);
+    setPassword('');
+  }
+
   async function submit(e: FormEvent) {
     e.preventDefault();
     setBusy(true);
@@ -36,13 +45,15 @@ export default function AuthScreen() {
     setConfirmSent(false);
     try {
       if (mode === 'signup') {
-        const { needsConfirm } = await backend.signUp({ name: name.trim(), email: email.trim(), password });
+        const { needsConfirm } = await backend.signUp({ username: login, password });
         if (needsConfirm) {
           setConfirmSent(true);
           setMode('signin');
         }
+      } else if (mode === 'signin') {
+        await backend.signIn({ login, password });
       } else {
-        await backend.signIn({ email: email.trim(), password });
+        await backend.resetPassword({ username: login, recoveryKey, password });
       }
     } catch (err) {
       // kept in English and translated when shown, so switching language updates it
@@ -52,39 +63,66 @@ export default function AuthScreen() {
     }
   }
 
+  const label = { signup: t.plantTree, signin: t.signIn, reset: t.resetAndSignIn }[mode];
+
   return (
     <div className="auth">
       <canvas ref={canvasRef} className="auth-bg" aria-hidden="true" />
       <form className="px-panel auth-card" onSubmit={submit}>
         <LangSwitch className="lang-auth" />
         <h1 className="brand-title">Rooted</h1>
-        <p className="muted auth-sub">{t.tagline}</p>
-        <div className="tabs" role="tablist">
-          <button type="button" role="tab" aria-selected={mode === 'signup'} className={`tab ${mode === 'signup' ? 'is-on' : ''}`} onClick={() => setMode('signup')}>
-            {t.createAccount}
-          </button>
-          <button type="button" role="tab" aria-selected={mode === 'signin'} className={`tab ${mode === 'signin' ? 'is-on' : ''}`} onClick={() => setMode('signin')}>
-            {t.signIn}
-          </button>
-        </div>
-        {mode === 'signup' && (
-          <label className="field">
-            <span className="field-label">{t.yourName}</span>
-            <input type="text" required maxLength={40} autoComplete="name" value={name} onChange={(e) => setName(e.target.value)} />
-          </label>
+        <p className="muted auth-sub">{mode === 'reset' ? t.resetIntro : t.tagline}</p>
+        {mode !== 'reset' && (
+          <div className="tabs" role="tablist">
+            <button type="button" role="tab" aria-selected={mode === 'signup'} className={`tab ${mode === 'signup' ? 'is-on' : ''}`} onClick={() => switchTo('signup')}>
+              {t.createAccount}
+            </button>
+            <button type="button" role="tab" aria-selected={mode === 'signin'} className={`tab ${mode === 'signin' ? 'is-on' : ''}`} onClick={() => switchTo('signin')}>
+              {t.signIn}
+            </button>
+          </div>
         )}
         <label className="field">
-          <span className="field-label">{t.email}</span>
-          <input type="email" required autoComplete="email" value={email} onChange={(e) => setEmail(e.target.value)} />
+          <span className="field-label">{t.username}</span>
+          <input
+            type="text"
+            required
+            maxLength={mode === 'signin' ? 254 : 20}
+            pattern={mode === 'signin' ? undefined : '[A-Za-z0-9_]{3,20}'}
+            title={mode === 'signin' ? undefined : t.usernameRule}
+            autoComplete="username"
+            autoCapitalize="none"
+            autoCorrect="off"
+            spellCheck={false}
+            value={login}
+            onChange={(e) => setLogin(e.target.value)}
+          />
+          {mode === 'signup' && <span className="muted small">{t.usernameRule}</span>}
         </label>
+        {mode === 'reset' && (
+          <label className="field">
+            <span className="field-label">{t.recoveryKey}</span>
+            <input
+              className="mono"
+              type="text"
+              required
+              autoComplete="off"
+              autoCapitalize="characters"
+              spellCheck={false}
+              placeholder="XXXX-XXXX-XXXX-XXXX-XXXX-XXXX-XXXX-XXXX"
+              value={recoveryKey}
+              onChange={(e) => setRecoveryKey(e.target.value)}
+            />
+          </label>
+        )}
         {!local && (
           <label className="field">
-            <span className="field-label">{t.password}</span>
+            <span className="field-label">{mode === 'reset' ? t.newPassword : t.password}</span>
             <input
               type="password"
               required
               minLength={6}
-              autoComplete={mode === 'signup' ? 'new-password' : 'current-password'}
+              autoComplete={mode === 'signin' ? 'current-password' : 'new-password'}
               value={password}
               onChange={(e) => setPassword(e.target.value)}
             />
@@ -97,8 +135,21 @@ export default function AuthScreen() {
         )}
         {confirmSent && <p className="form-info">{t.confirmEmail}</p>}
         <button className="btn btn-primary btn-block" disabled={busy}>
-          {busy ? t.pleaseWait : mode === 'signup' ? t.plantTree : t.signIn}
+          {busy ? t.pleaseWait : label}
         </button>
+        {!local && mode === 'signin' && (
+          <button type="button" className="link auth-link" onClick={() => switchTo('reset')}>
+            {t.forgotPassword}
+          </button>
+        )}
+        {mode === 'reset' && (
+          <>
+            <p className="muted small">{t.noRecoveryKey}</p>
+            <button type="button" className="link auth-link" onClick={() => switchTo('signin')}>
+              {t.back}
+            </button>
+          </>
+        )}
         {local && <p className="muted small">{t.localTrial}</p>}
       </form>
     </div>

@@ -6,6 +6,7 @@ import { useSyncExternalStore, type ReactNode } from 'react';
 import type { Period } from '../scene/engine';
 import type { Platform } from './install';
 import { SPECIES, type SpeciesId } from '../scene/species';
+import { LANDS } from '../scene/lands';
 import { ARRIVALS, STAGES, SUBJECT_PROMPTS, VERSES } from './growth';
 
 export type Lang = 'en' | 'tl';
@@ -59,7 +60,12 @@ const en = {
   // admin
   users: 'Users',
   total: (n: number) => `${n} total`,
-  col: { name: 'Name', email: 'Email', stage: 'Stage', growth: 'Growth', notes: 'Notes', last: 'Last note', joined: 'Joined' },
+  col: { name: 'Name', username: 'Username', email: 'Email', stage: 'Stage', growth: 'Growth', notes: 'Notes', last: 'Last note', joined: 'Joined', password: 'Password' },
+  adminReset: 'Reset',
+  adminResetConfirm: (name: string) =>
+    `Give ${name} a new password?\n\nTheir old password stops working. If they still have their recovery key, their notes reopen with it; if not, the notes written so far stay locked.`,
+  adminResetDone: (name: string) => `New password for ${name}:`,
+  adminResetHint: 'Give it to them in person or by message. It is shown only once.',
 
   // writing a note
   todaysNote: 'Today’s note',
@@ -155,16 +161,33 @@ const en = {
   pickFirstBlurb: 'Every note you write helps it grow. You can switch any time.',
   pickBlurb: 'Your growth stays the same — only the kind of tree changes.',
   growing: 'growing',
-  species: Object.fromEntries(SPECIES.map((s) => [s.id, { name: s.name, blurb: s.blurb }])) as Record<SpeciesId, { name: string; blurb: string }>,
+  species: Object.fromEntries(SPECIES.map((s) => [s.id, { name: s.name, blurb: s.blurb, land: LANDS[s.id].name }])) as Record<
+    SpeciesId,
+    { name: string; blurb: string; land: string }
+  >,
+  /** Under each tree in the picker: where it comes from (its land is drawn behind it). */
+  nativeTo: (land: string) => `Native to ${land}`,
 
   // signing in
   tagline: 'A tree that grows with your walk of faith.',
   createAccount: 'Create account',
   signIn: 'Sign in',
-  yourName: 'Your name',
-  email: 'Email',
+  username: 'Username',
+  usernameRule: '3–20 letters, numbers or _',
   password: 'Password',
-  confirmEmail: 'Account created. Confirm the email we sent you, then sign in.',
+  newPassword: 'New password',
+  forgotPassword: 'Forgot password?',
+  resetIntro: 'Enter your username, the recovery key you saved, and a new password.',
+  resetAndSignIn: 'Reset & sign in',
+  noRecoveryKey: 'No recovery key? Ask the admin to reset your password.',
+  confirmEmail:
+    'Account created, but the server is set to confirm emails, which usernames can’t do. Ask the admin to turn off “Confirm email” in Supabase.',
+  pickUsernameTitle: 'Pick a username',
+  pickUsernameIntro: 'From now on you’ll sign in with a username instead of your email. Your password stays the same.',
+  pickUsernameReset: 'Tip: to be able to reset a forgotten password yourself, make a new recovery key afterwards (Menu → Recovery key).',
+  notNow: 'Not now',
+  saveUsername: 'Save username',
+  usernameSaved: (name: string) => `Done — sign in as “${name}” from now on.`,
   pleaseWait: 'Please wait…',
   plantTree: 'Plant my tree',
   localTrial: 'Trial mode: accounts live only in this browser until Supabase is connected.',
@@ -192,7 +215,7 @@ const en = {
   unlock: 'Unlock',
   recoveryTitle: 'Your recovery key',
   recoveryWhy:
-    'If you ever forget your password, this key is the only way back into your notes. Nobody else has it — not even the admin — so no one can reset it for you.',
+    'If you ever forget your password, this key resets it and opens your notes again (Sign in → Forgot password?). Nobody else has it — not even the admin.',
   recoveryKeep:
     "Keep it somewhere safe: a password manager, or written on paper. If you lose both your password and this key, your notes can't be opened by anyone.",
   copy: 'Copy',
@@ -290,7 +313,12 @@ const tl: Strings = {
 
   users: 'Mga user',
   total: (n) => `${n} lahat`,
-  col: { name: 'Pangalan', email: 'Email', stage: 'Yugto', growth: 'Paglago', notes: 'Tala', last: 'Huling tala', joined: 'Sumali' },
+  col: { name: 'Pangalan', username: 'Username', email: 'Email', stage: 'Yugto', growth: 'Paglago', notes: 'Tala', last: 'Huling tala', joined: 'Sumali', password: 'Password' },
+  adminReset: 'I-reset',
+  adminResetConfirm: (name) =>
+    `Bigyan si ${name} ng bagong password?\n\nHindi na gagana ang luma niyang password. Kung nasa kanya pa ang recovery key, mabubuksan ulit ang kanyang mga tala gamit iyon; kung wala, mananatiling naka-lock ang mga talang naisulat na.`,
+  adminResetDone: (name) => `Bagong password ni ${name}:`,
+  adminResetHint: 'Ibigay ito sa kanya nang personal o sa mensahe. Isang beses lang ito ipapakita.',
 
   todaysNote: 'Tala ngayong araw',
   subject: 'Paksa',
@@ -412,22 +440,36 @@ const tl: Strings = {
   pickBlurb: 'Hindi magbabago ang iyong paglago — ang uri lang ng puno ang mapapalitan.',
   growing: 'pinalalago',
   species: {
-    oak: { name: 'Roble', blurb: 'Matibay at malapad, malalim ang ugat.' },
-    sakura: { name: 'Sakura', blurb: 'Mga bulaklak ng seresa na tinatangay ng hangin.' },
-    maple: { name: 'Maple', blurb: 'Nagliliyab na pula at kahel buong taon.' },
-    apple: { name: 'Mansanas', blurb: 'Namumunga sa kanyang kapanahunan.' },
-    birch: { name: 'Birch', blurb: 'Matangkad at puti ang balat, matingkad ang mga dahon.' },
-    willow: { name: 'Willow', blurb: 'Mahahabang nakalaylay na hibla na umiindayog.' },
-    pine: { name: 'Pino', blurb: 'Laging luntian, tumataas nang patong-patong.' },
+    oak: { name: 'Roble', blurb: 'Matibay at malapad, malalim ang ugat.', land: 'Inglatera' },
+    sakura: { name: 'Sakura', blurb: 'Mga bulaklak ng seresa na tinatangay ng hangin.', land: 'Hapon' },
+    maple: { name: 'Maple', blurb: 'Nagliliyab na pula at kahel buong taon.', land: 'Canada' },
+    apple: { name: 'Mansanas', blurb: 'Namumunga sa kanyang kapanahunan.', land: 'Kazakhstan' },
+    birch: { name: 'Birch', blurb: 'Matangkad at puti ang balat, matingkad ang mga dahon.', land: 'Rusya at Finland' },
+    willow: { name: 'Willow', blurb: 'Mahahabang nakalaylay na hibla na umiindayog.', land: 'Tsina' },
+    pine: { name: 'Pino', blurb: 'Laging luntian, tumataas nang patong-patong.', land: 'Pilipinas' },
   },
+  nativeTo: (land) => `Katutubo sa ${land}`,
 
   tagline: 'Isang punong lumalago kasabay ng iyong paglakad sa pananampalataya.',
   createAccount: 'Gumawa ng account',
   signIn: 'Mag-sign in',
-  yourName: 'Iyong pangalan',
-  email: 'Email',
+  username: 'Username',
+  usernameRule: '3–20 letra, numero o _',
   password: 'Password',
-  confirmEmail: 'Nagawa na ang account. Kumpirmahin ang email na ipinadala namin, saka mag-sign in.',
+  newPassword: 'Bagong password',
+  forgotPassword: 'Nakalimutan ang password?',
+  resetIntro: 'Ilagay ang iyong username, ang recovery key na itinago mo, at isang bagong password.',
+  resetAndSignIn: 'I-reset at mag-sign in',
+  noRecoveryKey: 'Walang recovery key? Pakisabi sa admin na i-reset ang iyong password.',
+  confirmEmail:
+    'Nagawa ang account, pero naka-set ang server na magkumpirma ng email, na hindi kaya ng username. Pakisabi sa admin na i-off ang “Confirm email” sa Supabase.',
+  pickUsernameTitle: 'Pumili ng username',
+  pickUsernameIntro: 'Mula ngayon, username na ang gagamitin mo sa pag-sign in sa halip na email. Hindi magbabago ang iyong password.',
+  pickUsernameReset:
+    'Tip: para ikaw mismo ang makapag-reset ng nakalimutang password, gumawa ng bagong recovery key pagkatapos nito (Menu → Recovery key).',
+  notNow: 'Mamaya na',
+  saveUsername: 'I-save ang username',
+  usernameSaved: (name) => `Tapos na — mag-sign in bilang “${name}” mula ngayon.`,
   pleaseWait: 'Sandali lang…',
   plantTree: 'Itanim ang aking puno',
   localTrial: 'Trial mode: sa browser na ito lang nakatago ang mga account hangga’t hindi pa konektado ang Supabase.',
@@ -455,7 +497,7 @@ const tl: Strings = {
   unlock: 'Buksan',
   recoveryTitle: 'Ang iyong recovery key',
   recoveryWhy:
-    'Kung makalimutan mo ang iyong password, ang key na ito lang ang paraan para mabuksan muli ang iyong mga tala. Walang ibang may hawak nito — kahit ang admin — kaya walang makakapag-reset nito para sa iyo.',
+    'Kung makalimutan mo ang iyong password, nire-reset ito ng key na ito at nabubuksan muli ang iyong mga tala (Mag-sign in → Nakalimutan ang password?). Walang ibang may hawak nito — kahit ang admin.',
   recoveryKeep:
     'Itago ito sa ligtas na lugar: sa isang password manager, o isulat sa papel. Kapag nawala pareho ang password mo at ang key na ito, wala nang makakabukas sa iyong mga tala.',
   copy: 'Kopyahin',
@@ -522,8 +564,20 @@ const tl: Strings = {
     'Profile not found': 'Hindi nahanap ang profile.',
     'Admins only': 'Para sa mga admin lang.',
     'Could not save in this browser (storage is full or blocked).': 'Hindi ma-save sa browser na ito (puno o naka-block ang storage).',
-    'That email already has an account here — sign in instead.': 'May account na ang email na iyan dito — mag-sign in na lang.',
-    'No account with that email in this browser.': 'Walang account na may ganyang email sa browser na ito.',
+    'No account with that username in this browser.': 'Walang account na may ganyang username sa browser na ito.',
+    // usernames and password resets (src/lib/backend.ts, supabase/functions/account)
+    'A username is 3–20 letters, numbers or _ (no spaces).': 'Ang username ay 3–20 letra, numero o _ (walang espasyo).',
+    'That username is taken.': 'May gumagamit na ng username na iyan.',
+    'Wrong username or password.': 'Mali ang username o password.',
+    "That username and recovery key don't match.": 'Hindi magkatugma ang username at recovery key na iyan.',
+    'Too many tries. Wait an hour, then try again.': 'Masyadong maraming subok. Maghintay ng isang oras, saka subukan ulit.',
+    "This account's recovery key can't reset the password. Ask the admin to reset it.":
+      'Hindi kayang i-reset ng recovery key ng account na ito ang password. Pakisabi sa admin na i-reset ito.',
+    'The admin keeps signing in with email.': 'Email pa rin ang gamit ng admin sa pag-sign in.',
+    'You already have a username.': 'May username ka na.',
+    'Reset your own password from the Supabase dashboard.': 'I-reset ang sarili mong password mula sa Supabase dashboard.',
+    'Usernames need the latest server update (supabase/functions/account and 20261120000000_usernames.sql) — ask the admin to set it up.':
+      'Kailangan ng pinakabagong server update (supabase/functions/account at 20261120000000_usernames.sql) para sa mga username — pakisabi sa admin na i-set up ito.',
     'Choosing a tree needs the latest database update (supabase/migrations) — ask the admin to run it.':
       'Kailangan ng pinakabagong database update (supabase/migrations) para makapili ng puno — pakisabi sa admin na patakbuhin ito.',
     "You're offline and this browser couldn't keep the note. Copy it somewhere safe and try again when you're online.":
@@ -547,8 +601,8 @@ const tl: Strings = {
     'Trial mode keeps notes in this browser only.': 'Sa browser na ito lang nakatago ang mga tala sa trial mode.',
     'Too many notes in 24 hours. Try again later.': 'Masyadong maraming tala sa loob ng 24 oras. Subukan ulit mamaya.',
     // Supabase Auth
-    'Invalid login credentials': 'Mali ang email o password.',
-    'User already registered': 'May account na ang email na ito — mag-sign in na lang.',
+    'Invalid login credentials': 'Mali ang username o password.',
+    'User already registered': 'May gumagamit na ng username na iyan.',
     'Email not confirmed': 'Hindi pa nakukumpirma ang email. Tingnan ang iyong inbox.',
     'Password should be at least 6 characters.': 'Dapat hindi bababa sa 6 na character ang password.',
     'Unable to validate email address: invalid format': 'Mali ang anyo ng email address.',

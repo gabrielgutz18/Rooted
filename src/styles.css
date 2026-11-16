@@ -809,6 +809,14 @@ p {
 .auth-card .field {
   text-align: left;
 }
+.auth-link {
+  justify-self: center;
+  margin-inline: auto;
+}
+/* the admin's one-time password for a member */
+.form-info .recovery-key {
+  margin-block: 6px;
+}
 .tabs {
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -949,6 +957,12 @@ p {
   padding: 0 10px;
   font-size: 13px;
   color: var(--ink-dim);
+}
+.tree-card-land {
+  padding: 0 10px;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--accent);
 }
 @media (max-width: 520px) {
   .picker-grid {

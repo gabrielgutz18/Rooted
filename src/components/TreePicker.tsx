@@ -71,6 +71,7 @@ function TreeCard({ species, hour, selected, onPick }: { species: Species; hour?
         {selected && <span className="tag">{t.growing}</span>}
       </span>
       <span className="tree-card-blurb">{t.species[species.id].blurb}</span>
+      <span className="tree-card-land">{t.nativeTo(t.species[species.id].land)}</span>
     </button>
   );
 }

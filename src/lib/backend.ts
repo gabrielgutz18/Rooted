@@ -7,6 +7,7 @@ import { supabase } from './supabase';
 import { dayStats, type DayStat } from './growth';
 import * as vault from './vault';
 import { isOffline } from './outbox';
+import { BAD_USERNAME, isValidUsername, loginEmail, normalizeUsername, usernameEmail } from './username';
 
 export interface Profile {
   id: string;
@@ -17,10 +18,13 @@ export interface Profile {
   last_entry_at: string | null;
   created_at: string;
   tree?: string | null; // which kind of tree they grow; null until they choose
+  /** What they sign in with. null: an older account that hasn't picked one yet (or the admin). */
+  username?: string | null;
 }
 
 export interface AdminUser extends Profile {
-  email: string;
+  /** The admin's sign-in email, or the email a member used before picking a username. */
+  email: string | null;
 }
 
 export interface Entry {
@@ -58,9 +62,16 @@ export interface Backend {
   getUserId(): Promise<string | null>;
   onAuth(cb: (userId: string | null) => void): () => void;
   /** Returns needsConfirm=true when Supabase is still set to require email confirmation. */
-  signUp(a: { name: string; email: string; password: string }): Promise<{ needsConfirm: boolean }>;
-  signIn(a: { email: string; password: string }): Promise<void>;
+  signUp(a: { username: string; password: string }): Promise<{ needsConfirm: boolean }>;
+  /** `login` is a username, or an email (the admin, and members who haven't picked a username yet). */
+  signIn(a: { login: string; password: string }): Promise<void>;
   signOut(): Promise<void>;
+  /** An older email account picks its username; from then on it signs in with that. */
+  chooseUsername(username: string): Promise<void>;
+  /** Forgot password: the recovery key sets a new one, signs in and reopens the notes. */
+  resetPassword(a: { username: string; recoveryKey: string; password: string }): Promise<void>;
+  /** Admin only: gives a member a new random password, returned to pass on to them. */
+  adminResetPassword(userId: string): Promise<string>;
   profile(id: string): Promise<Profile>;
   listProfiles(): Promise<Profile[]>;
   setTree(tree: string): Promise<void>;
@@ -84,6 +95,10 @@ export interface Backend {
 
 const NEEDS_UPDATE =
   'Private notes need the latest database update (supabase/migrations/20261118000000_private_notes.sql) — ask the admin to run it.';
+const NEEDS_ACCOUNT_SERVER =
+  'Usernames need the latest server update (supabase/functions/account and 20261120000000_usernames.sql) — ask the admin to set it up.';
+const TAKEN = 'That username is taken.';
+const WRONG_LOGIN = 'Wrong username or password.';
 const LOCKED_SUBJECT = 'locked'; // what the database holds in place of a locked note's subject
 
 // ---------------- cloud ----------------
@@ -93,10 +108,19 @@ const WRONG_PASSWORD = "That password doesn't open your notes. If it was changed
 const messageOf = (err: unknown) =>
   err && typeof err === 'object' && 'message' in err ? String((err as { message: unknown }).message) : String(err);
 
+/** Supabase Auth's wording assumes emails; members use usernames. */
+function authError(err: { message: string; code?: string }): Error {
+  if (err.code === 'user_already_exists' || err.code === 'email_exists' || /already (been )?registered/i.test(err.message)) return new Error(TAKEN);
+  if (err.code === 'invalid_credentials' || /invalid login credentials/i.test(err.message)) return new Error(WRONG_LOGIN);
+  return err instanceof Error ? err : new Error(err.message);
+}
+
 function cloud(): Backend {
   const sb = supabase!;
   const BASE = 'id, display_name, is_admin, points, entry_count, last_entry_at, created_at';
-  let P = `${BASE}, tree`;
+  // Newest columns first; each one is dropped while its migration hasn't been run yet.
+  const COLS = [`${BASE}, tree, username`, `${BASE}, tree`, BASE];
+  let level = 0;
   const E = 'id, subject, note, points, tags, created_at, sealed';
   const K = 'salt, iterations, wrapped, recovery_salt, recovery';
   type Row = Omit<Entry, 'pending' | 'locked'> & { sealed: string | null };
@@ -156,7 +180,43 @@ function cloud(): Backend {
       throw explain(error);
     }
     await vault.rememberKey(userId, made.key);
+    await saveResetCheck(userId, made.recoveryKey);
     return made.recoveryKey;
+  }
+
+  /**
+   * Lets this recovery key reset a forgotten password (the server keeps a hash of a value made
+   * from it). Best effort: the key itself is already saved, and failing here must not hide it.
+   */
+  async function saveResetCheck(userId: string, recoveryKey: string) {
+    try {
+      const check_hash = await vault.resetCheckHash(recoveryKey);
+      await sb.from('reset_checks').upsert({ user_id: userId, check_hash, updated_at: new Date().toISOString() });
+    } catch {
+      /* offline, or the usernames migration isn't run yet */
+    }
+  }
+
+  /** The recovery key opens the note key; lock it again with `password` and keep it here. */
+  async function reopenWithRecovery(userId: string, recoveryKey: string, password: string) {
+    const row = await keyRow(userId);
+    if (!row) throw new Error('This account has no note key yet — unlock with your password to set one up.');
+    const { update, key } = await vault.openWithRecovery(userId, row, recoveryKey, password);
+    await saveKeyRow(userId, update, false);
+    await vault.rememberKey(userId, key);
+  }
+
+  /** Calls the `account` server function (anything that changes how someone signs in). */
+  async function account<T>(body: Record<string, unknown>): Promise<T> {
+    const { data, error } = await sb.functions.invoke('account', { body });
+    if (!error) return data as T;
+    const res = (error as { context?: unknown }).context;
+    if (res instanceof Response) {
+      if (res.status === 404) throw new Error(NEEDS_ACCOUNT_SERVER);
+      const said = (await res.json().catch(() => null)) as { error?: unknown } | null;
+      if (said && typeof said.error === 'string') throw new Error(said.error);
+    }
+    throw error;
   }
 
   /** Right after signing in. If it can't unlock (offline, password was reset…) the app asks later. */
@@ -201,16 +261,19 @@ function cloud(): Backend {
     }
   }
 
-  // Until the tree-choice migration has been run there is no `tree` column; fall back
-  // to the old columns so the app keeps working (everyone shows as an oak).
+  // Until the tree-choice and usernames migrations have been run there are no `tree` and
+  // `username` columns; fall back to the older columns so the app keeps working (everyone
+  // shows as an oak, and nobody is asked for a username).
   async function profiles<T>(run: (cols: string) => PromiseLike<{ data: unknown; error: PostgrestError | null }>): Promise<T> {
-    let { data, error } = await run(P);
-    if (error && P !== BASE && (error.code === '42703' || /\btree\b/.test(error.message))) {
-      P = BASE;
-      ({ data, error } = await run(P));
+    for (;;) {
+      const { data, error } = await run(COLS[level]);
+      if (error && level < COLS.length - 1 && (error.code === '42703' || /\b(tree|username)\b/.test(error.message))) {
+        level++;
+        continue;
+      }
+      if (error) throw error;
+      return data as T;
     }
-    if (error) throw error;
-    return data as T;
   }
   return {
     mode: 'cloud',
@@ -226,20 +289,51 @@ function cloud(): Backend {
     },
     // Sign-up and sign-in are the moments we have the password, so the note key is opened
     // (or made) then. The app waits for this before deciding whether notes are locked.
-    async signUp({ name, email, password }) {
+    // A username account's email is a stand-in that never receives mail (src/lib/username.ts).
+    async signUp({ username, password }) {
+      if (!isValidUsername(username)) throw new Error(BAD_USERNAME);
       return vault.whileUnlocking(async () => {
-        const { data, error } = await sb.auth.signUp({ email, password, options: { data: { display_name: name } } });
-        if (error) throw error;
+        const { data, error } = await sb.auth.signUp({
+          email: usernameEmail(username),
+          password,
+          options: { data: { display_name: username.trim() } },
+        });
+        if (error) throw authError(error);
         if (data.session && data.user) await openAfterSignIn(data.user.id, password);
         return { needsConfirm: !data.session };
       });
     },
-    async signIn({ email, password }) {
+    async signIn({ login, password }) {
       await vault.whileUnlocking(async () => {
-        const { data, error } = await sb.auth.signInWithPassword({ email, password });
-        if (error) throw error;
+        const { data, error } = await sb.auth.signInWithPassword({ email: loginEmail(login), password });
+        if (error) throw authError(error);
         await openAfterSignIn(data.user.id, password);
       });
+    },
+    async chooseUsername(username) {
+      if (!isValidUsername(username)) throw new Error(BAD_USERNAME);
+      await account({ action: 'choose-username', username: normalizeUsername(username) });
+      // the session still carries the old email until it is refreshed
+      await sb.auth.refreshSession();
+    },
+    async resetPassword({ username, recoveryKey, password }) {
+      if (!isValidUsername(username)) throw new Error("That username and recovery key don't match.");
+      if (password.length < 6) throw new Error('Password should be at least 6 characters.');
+      const check = await vault.resetCheck(recoveryKey);
+      await account({ action: 'reset', username: normalizeUsername(username), check, password });
+      await vault.whileUnlocking(async () => {
+        const { data, error } = await sb.auth.signInWithPassword({ email: usernameEmail(username), password });
+        if (error) throw authError(error);
+        try {
+          // the same key reopens the notes, locked from now on with the new password
+          await reopenWithRecovery(data.user.id, recoveryKey, password);
+        } catch {
+          /* the unlock screen takes it from here */
+        }
+      });
+    },
+    async adminResetPassword(userId) {
+      return (await account<{ password: string }>({ action: 'admin-reset', user_id: userId })).password;
     },
     async signOut() {
       await vault.forgetKeys(); // the next person on this device can't open the notes
@@ -337,12 +431,10 @@ function cloud(): Backend {
     },
     async recover(recoveryKey, password) {
       const { id } = await me();
-      const row = await keyRow(id);
-      if (!row) throw new Error('This account has no note key yet — unlock with your password to set one up.');
+      if (!(await keyRow(id))) throw new Error('This account has no note key yet — unlock with your password to set one up.');
       await checkPassword(password);
-      const { update, key } = await vault.openWithRecovery(id, row, recoveryKey, password);
-      await saveKeyRow(id, update, false);
-      await vault.rememberKey(id, key);
+      await reopenWithRecovery(id, recoveryKey, password);
+      await saveResetCheck(id, recoveryKey); // older keys: from now on this one resets the password too
     },
     async startOver(password) {
       const { id } = await me();
@@ -351,6 +443,7 @@ function cloud(): Backend {
       const made = await vault.createKeys(id, password);
       await saveKeyRow(id, made.row, !row);
       await vault.rememberKey(id, made.key);
+      await saveResetCheck(id, made.recoveryKey);
       return { recoveryKey: made.recoveryKey };
     },
     async newRecoveryKey(password) {
@@ -364,6 +457,7 @@ function cloud(): Backend {
         throw new Error("That isn't the password your notes are locked with.");
       }
       await saveKeyRow(id, made.update, false);
+      await saveResetCheck(id, made.recoveryKey); // the old key stops resetting the password too
       return made.recoveryKey;
     },
   };
@@ -372,7 +466,7 @@ function cloud(): Backend {
 // ---------------- local ----------------
 
 interface LocalDB {
-  users: { id: string; name: string; email: string; is_admin: boolean; created_at: string; tree?: string | null }[];
+  users: { id: string; name: string; username?: string | null; email?: string; is_admin: boolean; created_at: string; tree?: string | null }[];
   entries: (Entry & { user_id: string })[];
   session: string | null;
 }
@@ -401,7 +495,7 @@ function local(): Backend {
   const toProfile = (db: LocalDB, u: LocalDB['users'][number]): Profile => {
     const mine = db.entries.filter((e) => e.user_id === u.id);
     return {
-      id: u.id, display_name: u.name, is_admin: u.is_admin, created_at: u.created_at, tree: u.tree ?? null,
+      id: u.id, display_name: u.name, is_admin: u.is_admin, created_at: u.created_at, tree: u.tree ?? null, username: u.username ?? null,
       points: mine.reduce((s, e) => s + e.points, 0), entry_count: mine.length,
       last_entry_at: mine.map((e) => e.created_at).sort().pop() ?? null,
     };
@@ -425,20 +519,39 @@ function local(): Backend {
       listeners.add(cb);
       return () => listeners.delete(cb);
     },
-    async signUp({ name, email }) {
+    async signUp({ username }) {
+      if (!isValidUsername(username)) throw new Error(BAD_USERNAME);
       const db = read();
-      const mail = email.trim().toLowerCase();
-      if (db.users.some((u) => u.email === mail)) throw new Error('That email already has an account here — sign in instead.');
-      const user = { id: uid(), name: name.trim(), email: mail, is_admin: db.users.length === 0, created_at: new Date().toISOString() };
+      const name = normalizeUsername(username);
+      if (db.users.some((u) => u.username === name)) throw new Error(TAKEN);
+      const user = { id: uid(), name: username.trim(), username: name, is_admin: db.users.length === 0, created_at: new Date().toISOString() };
       db.users.push(user);
       setSession(db, user.id);
       return { needsConfirm: false };
     },
-    async signIn({ email }) {
+    async signIn({ login }) {
       const db = read();
-      const user = db.users.find((u) => u.email === email.trim().toLowerCase());
-      if (!user) throw new Error('No account with that email in this browser.');
+      const user = login.includes('@')
+        ? db.users.find((u) => u.email === login.trim().toLowerCase()) // trial accounts made before usernames
+        : db.users.find((u) => u.username === normalizeUsername(login));
+      if (!user) throw new Error('No account with that username in this browser.');
       setSession(db, user.id);
+    },
+    async chooseUsername(username) {
+      if (!isValidUsername(username)) throw new Error(BAD_USERNAME);
+      const db = read();
+      const name = normalizeUsername(username);
+      const user = db.users.find((u) => u.id === me(db));
+      if (!user) throw new Error('Not signed in');
+      if (db.users.some((u) => u.username === name && u.id !== user.id)) throw new Error(TAKEN);
+      user.username = name;
+      write(db);
+    },
+    async resetPassword() {
+      throw new Error('Trial mode keeps notes in this browser only.');
+    },
+    async adminResetPassword() {
+      throw new Error('Trial mode keeps notes in this browser only.');
     },
     async signOut() {
       setSession(read(), null);
@@ -487,7 +600,7 @@ function local(): Backend {
     async adminUsers() {
       const db = read();
       if (!db.users.find((u) => u.id === db.session)?.is_admin) throw new Error('Admins only');
-      return db.users.map((u) => ({ ...toProfile(db, u), email: u.email }));
+      return db.users.map((u) => ({ ...toProfile(db, u), email: u.email ?? null }));
     },
     // Trial mode never sends notes anywhere, so there is nothing to lock.
     async noteLock() {

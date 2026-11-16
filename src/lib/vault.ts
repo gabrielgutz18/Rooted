@@ -204,6 +204,35 @@ export async function replaceRecoveryKey(
   return { update: { recovery_salt: toB64(salt), recovery }, recoveryKey };
 }
 
+// ---------------- password reset with the recovery key ----------------
+// The recovery key also resets a forgotten password. The server keeps only a hash of a value
+// made from the recovery key (never the key itself), and resets the password for whoever can
+// produce that value again. It is made with a different label from the key that locks the
+// note key, so the stored hash says nothing about the notes.
+
+async function resetValue(code: Bytes): Promise<Bytes> {
+  const base = await crypto.subtle.importKey('raw', code, 'HKDF', false, ['deriveBits']);
+  const bits = await crypto.subtle.deriveBits(
+    { name: 'HKDF', hash: 'SHA-256', salt: new Uint8Array(0), info: enc.encode('rooted reset v1') },
+    base,
+    256,
+  );
+  return new Uint8Array(bits);
+}
+
+/** What a reset request sends: proof of holding the recovery key. */
+export async function resetCheck(recoveryKey: string): Promise<string> {
+  const code = readRecoveryKey(recoveryKey);
+  if (!code) throw new Error('A recovery key has 32 letters and numbers, like ABCD-EFGH-… — check it and try again.');
+  return toB64(await resetValue(code));
+}
+
+/** What the server stores: the SHA-256 (hex) of the reset value. */
+export async function resetCheckHash(recoveryKey: string): Promise<string> {
+  const digest = new Uint8Array(await crypto.subtle.digest('SHA-256', fromB64(await resetCheck(recoveryKey))));
+  return Array.from(digest, (b) => b.toString(16).padStart(2, '0')).join('');
+}
+
 // ---------------- locking notes ----------------
 
 // The note's id is mixed in, so locked text can't be swapped between notes unnoticed.

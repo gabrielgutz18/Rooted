@@ -53,6 +53,27 @@ the API directly. Limits are in `src/lib/spam.ts`.
 All text people read lives in `src/lib/i18n.tsx`. Any new text needs both an `en` and a
 `tl` entry (TypeScript enforces it).
 
+## Signing in: usernames
+
+Members sign up and sign in with a **username and password**, with no email needed. Only the
+admin signs in with an email (type it in the same Username box; anything with an `@` is
+treated as an email).
+
+- Supabase accounts need an email, so each username gets a stand-in address,
+  `<username>@rooted.invalid`. The `.invalid` domain can never receive mail, and nobody
+  types or sees it (`src/lib/username.ts`).
+- Members who signed up with an email before this sign in with it once more. The app then
+  asks them to pick a username, and from then on only the username works. The admin still
+  sees their old email in Admin · users.
+- **Forgot password?** (on the sign-in card): username + recovery key + a new password.
+  The same key reopens their notes, so nothing ends up locked. Recovery keys made before this
+  update can't reset passwords. Members can make a new one from Menu → Recovery key (or use
+  their old one once on the unlock screen) to turn it on.
+- **No recovery key?** The admin can give them a new password: Admin · users → **Reset**. It
+  shows a random password once, for the admin to pass on. Notes written so far reopen only with
+  their recovery key. Without one, they stay locked for good.
+- Wrong recovery keys are limited to 5 tries per username per hour.
+
 ## Install it like an app
 
 Rooted is a web app that can also be installed (a PWA): menu → **Install app**. It then
@@ -74,12 +95,26 @@ Supabase automatically when the connection comes back, keeping the time they wer
    Already set up? Run only the files that are newer than your setup, oldest first
    (for example `20261118000000_private_notes.sql` for encrypted notes).
 3. Authentication → Sign In / Providers → Email → turn **Confirm email** off
-   (so creating an account logs you straight in).
+   (so creating an account logs you straight in; usernames can't confirm an email).
 4. Copy `.env.example` to `.env.local` and fill in the project URL and publishable key
    (Project Settings → API).
-5. Restart `npm run dev`.
+5. Deploy the account server function (usernames and password resets need it):
 
-**The first account created becomes the admin** — create yours first.
+   ```bash
+   npx supabase login
+   npx supabase functions deploy account --no-verify-jwt --project-ref <your-project-ref>
+   ```
+
+   `<your-project-ref>` is the part before `.supabase.co` in your project URL. Keep
+   `--no-verify-jwt`: the function checks who is calling itself, and the publishable key
+   isn't a JWT. (Or, in the dashboard: Edge Functions → Deploy a new function → Via editor,
+   name it `account`, paste `supabase/functions/account/index.ts`, deploy, then turn
+   **Verify JWT** off in its settings.)
+6. Restart `npm run dev`.
+
+**The first account created becomes the admin.** Create yours first, with your email:
+Authentication → Users → Add user → Create new user (tick **Auto Confirm User**). Members
+then sign up in the app with usernames.
 
 ## Put it online
 
@@ -98,13 +133,17 @@ setting the same two `VITE_SUPABASE_…` variables there.
 | The trees you can grow: colours, branch shape, what falls from them | `src/scene/species.ts` |
 | Wind, swaying, fluttering leaves, animals, sun and moon | `src/scene/engine.ts` |
 | Leaf clumps (outlined, lit tufts) | `src/scene/foliage.ts` |
-| Sky, mountains, hills, soil | `src/scene/backdrop.ts` |
+| Sky, mountains, hills, soil, landmarks, the small trees in the distance | `src/scene/backdrop.ts` |
+| Each tree's native land (Japan for sakura, Canada for maple…) | `src/scene/lands.ts` |
 | Pixel drawing helpers (bark shading, leaf shapes, dithering) | `src/scene/raster.ts` |
 | Animal pixel art | `src/scene/sprites.ts` |
 | Tree picker | `src/components/TreePicker.tsx` |
 | Database tables and security rules | `supabase/migrations/` |
 | Note encryption (keys, locking, recovery key) | `src/lib/vault.ts` |
 | Unlock screen and recovery key dialog | `src/components/Unlock.tsx` |
+| Username rules and the stand-in email | `src/lib/username.ts` |
+| Picking a username (older email accounts) | `src/components/UsernameDialog.tsx` |
+| Choosing a username, password resets (server) | `supabase/functions/account/index.ts` |
 
 ## Privacy
 
@@ -114,16 +153,20 @@ access can read them: not friends, not Supabase, and not the admin (not even fro
 dashboard's table editor or SQL editor).
 
 - **What stays readable** (the tree and squares need it): each note's points and date, the
-  number of notes, and the profile (name, email, tree). Subject, note text and tags are locked.
+  number of notes, and the profile (name, username, tree). Subject, note text and tags are
+  locked. Emails exist only for the admin and for members who joined before usernames, and
+  only the admin can see them.
 - **How the key works:** each person has a random note key (AES-256-GCM). The server
   only stores it locked twice (`note_keys` table): once with a key made from their password
   (PBKDF2-SHA256, 600,000 rounds) and once with their **recovery key**. Once unlocked, the
   key stays on the device so the app opens without the password. Sign out deletes it.
 - **Recovery key:** shown once when the key is made (at sign-up, or the first time after
-  this update). Menu → **Recovery key** makes a new one. If an admin resets someone's
-  password, their notes stay locked until they enter the recovery key. If they lose both the
-  password and the recovery key, nobody can open their old notes. That's the price of the
-  admin not being able to read them.
+  this update). Menu → **Recovery key** makes a new one. It also resets a forgotten password:
+  the server keeps only a SHA-256 hash of a value made from the key (HKDF, its own label, so it
+  says nothing about the notes), in `reset_checks`. If an admin resets someone's password,
+  their notes stay locked until they enter the recovery key. If they lose both the password
+  and the recovery key, nobody can open their old notes. That's the price of the admin not
+  being able to read them.
 - **Older notes** saved before encryption are locked automatically the next time their
   owner opens the app. Until then they are readable in the database. Earlier plain copies
   can also stay in Supabase's backups until those expire.

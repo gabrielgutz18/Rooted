@@ -305,7 +305,8 @@ export class Scene {
     const cx = Math.round(W / 2);
 
     // ----- camera: zoom out as the tree gets taller -----
-    const wantView = this.opts.tight ? clamp(tree.S * 1.22 + 16, 40, 400) : clamp(tree.S * 1.3 + 34, 46, 260);
+    // previews leave room around the tree to show its native land
+    const wantView = this.opts.tight ? clamp(tree.S * 1.5 + 22, 46, 400) : clamp(tree.S * 1.3 + 34, 46, 260);
     if (!this.viewH) this.viewH = wantView;
     this.viewH += (wantView - this.viewH) * Math.min(1, dt * 1.4);
     const z = H / this.viewH;
@@ -321,10 +322,10 @@ export class Scene {
     const sky = SKY[period];
     const pal = this.palette(sp, period);
 
-    const bgKey = `${W}x${H}:${period}`;
+    const bgKey = `${W}x${H}:${period}:${sp.id}`; // each tree stands in its own native land
     if (bgKey !== this.bgKey) {
       this.bgKey = bgKey;
-      const b = buildBackdrop(W, H, gy, sky.stops, GRADE[period], HILL_LIGHT[period]);
+      const b = buildBackdrop(W, H, gy, sky.stops, GRADE[period], HILL_LIGHT[period], sp);
       this.bg = b.px;
       this.skyTop = b.skyTop;
       const [cl, cm, cd] = sky.cloud.map(hex);
