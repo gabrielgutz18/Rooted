@@ -3,11 +3,11 @@
 //  - local: this browser only (works with zero setup, good for trying things out)
 
 import type { PostgrestError } from '@supabase/supabase-js';
-import { supabase } from './supabase';
+import { storedUser, supabase } from './supabase';
 import { dayStats, type DayStat } from './growth';
 import * as vault from './vault';
-import { isOffline } from './outbox';
-import { BAD_USERNAME, isValidUsername, loginEmail, normalizeUsername, usernameEmail } from './username';
+import { isOffline, withTimeout } from './outbox';
+import { BAD_USERNAME, USERNAME_DOMAIN, isValidUsername, loginEmail, normalizeUsername, usernameEmail } from './username';
 
 export interface Profile {
   id: string;
@@ -48,6 +48,9 @@ export type NoteLock =
 
 export type EntryInput = Pick<Entry, 'subject' | 'note' | 'points' | 'tags'>;
 
+/** What editing a note can change. Its date and the growth it earned stay as they were. */
+export type EntryEdit = Pick<Entry, 'subject' | 'note' | 'tags'>;
+
 /**
  * The id a note was given on the device (so uploading it twice saves it once) and, for
  * notes written offline, when it was written. Without created_at the server's clock is used.
@@ -68,6 +71,8 @@ export interface Backend {
   signOut(): Promise<void>;
   /** An older email account picks its username; from then on it signs in with that. */
   chooseUsername(username: string): Promise<void>;
+  /** The email this account signs in with, or null when it signs in with a username. Works offline. */
+  signInEmail(): Promise<string | null>;
   /** Forgot password: the recovery key sets a new one, signs in and reopens the notes. */
   resetPassword(a: { username: string; recoveryKey: string; password: string }): Promise<void>;
   /** Admin only: gives a member a new random password, returned to pass on to them. */
@@ -77,6 +82,8 @@ export interface Backend {
   setTree(tree: string): Promise<void>;
   listEntries(): Promise<Entry[]>;
   addEntry(input: EntryInput, keep?: KeepAs): Promise<Entry>;
+  /** Rewrites a saved note's subject, note and tags (locked again with the same key). */
+  editEntry(id: string, edit: EntryEdit): Promise<void>;
   removeEntry(id: string): Promise<void>;
   /** Per-day activity for anyone's tree — counts only, never their notes. */
   activity(userId: string): Promise<DayStat[]>;
@@ -128,8 +135,26 @@ function cloud(): Backend {
   /** Missing table or column: the private-notes migration hasn't been run yet. */
   const explain = (e: PostgrestError) => (['42703', '42P01', 'PGRST204', 'PGRST205'].includes(e.code) ? new Error(NEEDS_UPDATE) : e);
 
+  /**
+   * Who is signed in, without waiting on the network. Offline (or on a connection that
+   * hangs) an expired sign-in can't be refreshed, so supabase-js reports none after ~30 s
+   * of retrying; it is still kept on this device, so that one counts (see storedUser).
+   */
+  async function currentUser(): Promise<{ id: string; email?: string } | null> {
+    if (navigator.onLine === false) return storedUser();
+    try {
+      const { data, error } = await withTimeout(sb.auth.getSession(), 5000);
+      if (data.session) return data.session.user;
+      // couldn't refresh for lack of a connection: storage still holds the sign-in
+      if (error && (error.name === 'AuthRetryableFetchError' || isOffline(error))) return storedUser();
+      return null;
+    } catch {
+      return storedUser(); // timed out
+    }
+  }
+
   async function me() {
-    const user = (await sb.auth.getSession()).data.session?.user;
+    const user = await currentUser();
     if (!user) throw new Error('Not signed in');
     return user;
   }
@@ -278,12 +303,17 @@ function cloud(): Backend {
   return {
     mode: 'cloud',
     async getUserId() {
-      return (await sb.auth.getSession()).data.session?.user.id ?? null;
+      return (await currentUser())?.id ?? null;
     },
     onAuth(cb) {
-      const { data } = sb.auth.onAuthStateChange((_e, s) => {
-        if (!s) void vault.forgetKeys(); // signed out (here or because the session ended): no keys left behind
-        cb(s?.user.id ?? null);
+      const { data } = sb.auth.onAuthStateChange((event, s) => {
+        if (event === 'SIGNED_OUT') {
+          void vault.forgetKeys(); // signed out (here, or the server ended the session): no keys left behind
+          return cb(null);
+        }
+        // INITIAL_SESSION comes without a session when an expired sign-in couldn't be
+        // refreshed offline. That isn't a sign-out: stay in, with the sign-in kept here.
+        cb(s?.user.id ?? storedUser()?.id ?? null);
       });
       return () => data.subscription.unsubscribe();
     },
@@ -316,6 +346,10 @@ function cloud(): Backend {
       // the session still carries the old email until it is refreshed
       await sb.auth.refreshSession();
     },
+    async signInEmail() {
+      const email = (await currentUser())?.email;
+      return email && !email.endsWith(`@${USERNAME_DOMAIN}`) ? email : null;
+    },
     async resetPassword({ username, recoveryKey, password }) {
       if (!isValidUsername(username)) throw new Error("That username and recovery key don't match.");
       if (password.length < 6) throw new Error('Password should be at least 6 characters.');
@@ -347,8 +381,7 @@ function cloud(): Backend {
       return profiles<Profile[]>((cols) => sb.from('profiles').select(cols).order('points', { ascending: false }).limit(500));
     },
     async setTree(tree) {
-      const id = (await sb.auth.getSession()).data.session?.user.id;
-      if (!id) throw new Error('Not signed in');
+      const { id } = await me();
       const { error } = await sb.from('profiles').update({ tree }).eq('id', id);
       if (error) {
         if (error.code === '42703' || /\btree\b/.test(error.message))
@@ -397,6 +430,14 @@ function cloud(): Backend {
       }
       throw explain(error);
     },
+    async editEntry(id, edit) {
+      const key = await noteKey();
+      const sealed = await vault.seal(key, id, edit);
+      // the database only ever sees the new locked text; points and the date can't change
+      const { data, error } = await sb.from('entries').update({ subject: LOCKED_SUBJECT, note: '', tags: [], sealed }).eq('id', id).select('id');
+      if (error) throw explain(error);
+      if (!data?.length) throw new Error('That note is gone — it may have been deleted on another device.');
+    },
     async removeEntry(id) {
       const { error } = await sb.from('entries').delete().eq('id', id);
       if (error) throw error;
@@ -414,7 +455,7 @@ function cloud(): Backend {
     },
     async noteLock() {
       await vault.unlockSettled();
-      const user = (await sb.auth.getSession()).data.session?.user;
+      const user = await currentUser();
       if (!user) return { open: false, hasKey: null, problem: null };
       if (await vault.deviceKey(user.id)) return { open: true, recoveryKey: vault.takeRecoveryKey(user.id) };
       try {
@@ -547,6 +588,11 @@ function local(): Backend {
       user.username = name;
       write(db);
     },
+    async signInEmail() {
+      const db = read();
+      const user = db.users.find((u) => u.id === db.session);
+      return user && !user.username ? (user.email ?? null) : null;
+    },
     async resetPassword() {
       throw new Error('Trial mode keeps notes in this browser only.');
     },
@@ -587,6 +633,14 @@ function local(): Backend {
       db.entries.push({ ...entry, user_id: me(db) });
       write(db);
       return entry;
+    },
+    async editEntry(id, edit) {
+      const db = read();
+      const owner = me(db);
+      const entry = db.entries.find((e) => e.id === id && e.user_id === owner);
+      if (!entry) throw new Error('That note is gone.');
+      Object.assign(entry, { subject: edit.subject, note: edit.note, tags: edit.tags });
+      write(db);
     },
     async removeEntry(id) {
       const db = read();

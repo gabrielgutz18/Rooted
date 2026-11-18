@@ -82,6 +82,7 @@ const en = {
   statGrowth: 'growth',
   statNotes: 'notes',
   statStage: 'stage',
+  statStreak: 'day streak',
   notesPrivate: 'Notes are private — friends only see the tree and the progress squares.',
 
   // admin
@@ -146,6 +147,12 @@ const en = {
   yesDelete: 'Yes, delete',
   keep: 'Keep',
   del: 'Delete',
+  editBtn: 'Edit',
+  editNote: (subject: string) => `Edit “${subject}”`,
+  saveChanges: 'Save changes',
+  cancel: 'Cancel',
+  editKeeps: 'The note keeps its date and the growth it earned.',
+  editNeedsOnline: "You're offline — changes to a saved note need a connection. Try again when you're back online.",
 
   // progress squares
   dayTitle: (count: number, points: number, date: string) => `${count} ${count === 1 ? 'note' : 'notes'} · +${points} growth — ${date}`,
@@ -223,6 +230,23 @@ const en = {
   notNow: 'Not now',
   saveUsername: 'Save username',
   usernameSaved: (name: string) => `Done — sign in as “${name}” from now on.`,
+
+  // your profile (Menu → My profile)
+  profileMenu: 'My profile',
+  profileTitle: 'Your profile',
+  addUsernameTag: 'Add username',
+  noUsernameYet: 'None yet',
+  signInWith: 'Sign in with',
+  signInEmail: (email: string) => `Your email, ${email}`,
+  signInEmailOnly: 'Your email',
+  signInUsername: (name: string) => `Your username, “${name}”`,
+  profileTree: 'Tree',
+  changeTree: 'Change',
+  addUsernameTitle: 'Add a username',
+  addUsernameIntro:
+    'Pick a username and sign in with it from now on, instead of your email. Your password, tree and notes stay the same — only your email stops working for signing in.',
+  adminKeepsEmail: 'As the admin, you keep signing in with your email.',
+  offlineRetry: "You're offline — connect to the internet and try again.",
   pleaseWait: 'Please wait…',
   plantTree: 'Plant my tree',
   localTrial: 'Trial mode: accounts live only in this browser until Supabase is connected.',
@@ -367,6 +391,7 @@ const tl: Strings = {
   statGrowth: 'paglago',
   statNotes: 'tala',
   statStage: 'yugto',
+  statStreak: 'araw na sunod-sunod',
   notesPrivate: 'Pribado ang mga tala — ang puno at ang mga parisukat ng pag-unlad lang ang nakikita ng mga kaibigan.',
 
   users: 'Mga user',
@@ -439,6 +464,12 @@ const tl: Strings = {
   yesDelete: 'Oo, burahin',
   keep: 'Huwag na',
   del: 'Burahin',
+  editBtn: 'I-edit',
+  editNote: (subject) => `I-edit ang “${subject}”`,
+  saveChanges: 'I-save ang pagbabago',
+  cancel: 'Kanselahin',
+  editKeeps: 'Mananatili ang petsa ng tala at ang paglagong naidulot nito.',
+  editNeedsOnline: 'Offline ka — kailangan ng koneksyon para baguhin ang naka-save na tala. Subukan ulit pagbalik mo online.',
 
   dayTitle: (count, points, date) => `${count} tala · +${points} paglago — ${date}`,
   nothingYet: (date) => `Wala pa — ${date}`,
@@ -547,6 +578,22 @@ const tl: Strings = {
   notNow: 'Mamaya na',
   saveUsername: 'I-save ang username',
   usernameSaved: (name) => `Tapos na — mag-sign in bilang “${name}” mula ngayon.`,
+
+  profileMenu: 'Aking profile',
+  profileTitle: 'Iyong profile',
+  addUsernameTag: 'Magdagdag ng username',
+  noUsernameYet: 'Wala pa',
+  signInWith: 'Pag-sign in gamit ang',
+  signInEmail: (email) => `Iyong email, ${email}`,
+  signInEmailOnly: 'Iyong email',
+  signInUsername: (name) => `Iyong username, “${name}”`,
+  profileTree: 'Puno',
+  changeTree: 'Palitan',
+  addUsernameTitle: 'Magdagdag ng username',
+  addUsernameIntro:
+    'Pumili ng username at iyon na ang gamitin sa pag-sign in mula ngayon, sa halip na ang iyong email. Hindi magbabago ang iyong password, puno at mga tala — ang email mo lang ang hindi na gagana sa pag-sign in.',
+  adminKeepsEmail: 'Bilang admin, email pa rin ang gamit mo sa pag-sign in.',
+  offlineRetry: 'Offline ka — kumonekta sa internet at subukan ulit.',
   pleaseWait: 'Sandali lang…',
   plantTree: 'Itanim ang aking puno',
   localTrial: 'Trial mode: sa browser na ito lang nakatago ang mga account hangga’t hindi pa konektado ang Supabase.',
@@ -739,5 +786,8 @@ export const strings = (): Strings => STRINGS[current];
 /** A stored English tag, in the chosen language. */
 export const tagName = (t: Strings, tag: string) => t.tags[tag] ?? tag;
 
+// What browsers say when a request can't reach the server at all.
+const NO_CONNECTION = /failed to fetch|load failed|networkerror|network request failed|fetch failed|err_internet_disconnected/i;
+
 /** An error message, in the chosen language when we know it. */
-export const errorText = (t: Strings, msg: string) => t.errors[msg] ?? msg;
+export const errorText = (t: Strings, msg: string) => t.errors[msg] ?? (NO_CONNECTION.test(msg) ? t.offlineRetry : msg);

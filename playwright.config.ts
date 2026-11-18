@@ -1,8 +1,12 @@
 import { defineConfig, devices } from '@playwright/test';
 
-// Browser tests run against their own dev server in trial mode: the Supabase keys in
-// .env.local are overridden for this one server, so tests never touch the real database.
+// Browser tests run against their own dev servers, never the real database:
+//  - trial mode (most tests): the Supabase keys in .env.local are overridden for this server
+//  - offline cloud mode (e2e/offline.spec.ts): a made-up Supabase project that the tests cut
+//    off from the network, to check that the app still opens without a connection
 const PORT = 5178;
+const OFFLINE_PORT = 5188;
+const FAKE_SUPABASE = 'https://e2e-offline.supabase.co';
 
 export default defineConfig({
   testDir: 'e2e',
@@ -16,13 +20,30 @@ export default defineConfig({
     screenshot: 'only-on-failure',
   },
   projects: [
-    { name: 'desktop', use: { ...devices['Desktop Chrome'], channel: 'chrome', viewport: { width: 1280, height: 800 } } },
+    {
+      name: 'desktop',
+      testIgnore: /offline\.spec\.ts/,
+      use: { ...devices['Desktop Chrome'], channel: 'chrome', viewport: { width: 1280, height: 800 } },
+    },
+    {
+      name: 'offline',
+      testMatch: /offline\.spec\.ts/,
+      use: { ...devices['Desktop Chrome'], channel: 'chrome', viewport: { width: 1280, height: 800 }, baseURL: `http://localhost:${OFFLINE_PORT}` },
+    },
   ],
-  webServer: {
-    command: `npx vite --port ${PORT} --strictPort`,
-    url: `http://localhost:${PORT}`,
-    reuseExistingServer: false,
-    // variables already set win over .env files in Vite; 'your-project-ref' means "not configured"
-    env: { VITE_SUPABASE_URL: 'your-project-ref', VITE_SUPABASE_PUBLISHABLE_KEY: '' },
-  },
+  webServer: [
+    {
+      command: `npx vite --port ${PORT} --strictPort`,
+      url: `http://localhost:${PORT}`,
+      reuseExistingServer: false,
+      // variables already set win over .env files in Vite; 'your-project-ref' means "not configured"
+      env: { VITE_SUPABASE_URL: 'your-project-ref', VITE_SUPABASE_PUBLISHABLE_KEY: '' },
+    },
+    {
+      command: `npx vite --port ${OFFLINE_PORT} --strictPort`,
+      url: `http://localhost:${OFFLINE_PORT}`,
+      reuseExistingServer: false,
+      env: { VITE_SUPABASE_URL: FAKE_SUPABASE, VITE_SUPABASE_PUBLISHABLE_KEY: 'sb_publishable_e2e_offline' },
+    },
+  ],
 });

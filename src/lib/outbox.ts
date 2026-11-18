@@ -2,7 +2,7 @@
 // Each keeps the id it was given and the time it was written, so uploading it later
 // (even twice, after a dropped connection) saves exactly one note with the right date.
 
-import type { Entry, EntryInput } from './backend';
+import type { Entry, EntryEdit, EntryInput } from './backend';
 
 export interface PendingNote extends EntryInput {
   id: string;
@@ -34,6 +34,15 @@ export function addToOutbox(userId: string, input: EntryInput, id: string): Pend
     throw new Error("You're offline and this browser couldn't keep the note. Copy it somewhere safe and try again when you're online.");
   }
   return note;
+}
+
+/** A note still waiting to upload is edited right here; it uploads with the new words. */
+export function editInOutbox(userId: string, id: string, edit: EntryEdit) {
+  try {
+    writeOutbox(userId, readOutbox(userId).map((n) => (n.id === id ? { ...n, ...edit } : n)));
+  } catch {
+    throw new Error("This browser couldn't keep the change. Copy it somewhere safe and try again.");
+  }
 }
 
 export function removeFromOutbox(userId: string, id: string) {

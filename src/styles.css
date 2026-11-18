@@ -1123,6 +1123,19 @@ p {
   -webkit-box-orient: vertical;
   overflow: hidden;
 }
+.note-edit {
+  display: grid;
+  gap: 10px;
+  margin-top: 6px;
+}
+.note-edit .field textarea {
+  min-height: 110px;
+}
+.note-edit-actions {
+  display: flex;
+  gap: 8px;
+  margin-left: auto;
+}
 .note-foot {
   display: flex;
   flex-wrap: wrap;
@@ -1779,5 +1792,68 @@ p {
   }
   .lamp-sparks {
     display: none;
+  }
+}
+
+/* ---------- Menu → My profile ---------- */
+.profile-head {
+  display: grid;
+  gap: 2px;
+}
+.profile-head p {
+  margin: 0;
+}
+.profile-name {
+  font-family: var(--font-px);
+  font-size: 26px;
+  font-weight: 700;
+  line-height: 1.15;
+  overflow-wrap: anywhere;
+}
+.profile-facts {
+  display: grid;
+  gap: 0;
+  margin: 0;
+}
+.profile-facts > div {
+  display: grid;
+  grid-template-columns: minmax(96px, 34%) minmax(0, 1fr);
+  gap: 10px;
+  align-items: center;
+  padding: 8px 0;
+  border-bottom: 2px dashed var(--panel-2);
+}
+.profile-facts > div:last-child {
+  border-bottom: 0;
+}
+.profile-facts dt {
+  font-size: 14px;
+  color: var(--ink-dim);
+}
+.profile-facts dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+.profile-tree {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.profile-add {
+  display: grid;
+  gap: 8px;
+  padding-top: 12px;
+  border-top: var(--b) solid var(--line);
+}
+.profile-add .side-title,
+.profile-add p {
+  margin: 0;
+}
+@media (max-width: 420px) {
+  .profile-facts > div {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 2px;
   }
 }

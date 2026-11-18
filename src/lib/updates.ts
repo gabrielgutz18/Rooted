@@ -68,6 +68,24 @@ const cap = (s: string) => s[0].toUpperCase() + s.slice(1);
 
 export const UPDATES: Update[] = [
   {
+    id: '2026-11-18-edit-notes',
+    date: '2026-11-18',
+    title: { en: 'Edit your notes', tl: 'I-edit ang iyong mga tala' },
+    intro: {
+      en: 'Spotted a typo, or remembered something you meant to write? You can now change your older notes.',
+      tl: 'May napansing mali sa pagsulat, o may naalalang gusto mong isulat? Mababago mo na ngayon ang iyong mga lumang tala.',
+    },
+    sections: [
+      {
+        heading: { en: 'Press Edit on any note', tl: 'Pindutin ang I-edit sa anumang tala' },
+        text: {
+          en: 'In My notes, press Edit beside a note to change its subject or words, then Save changes. The note keeps its date and the growth it already gave your tree, and it stays locked so only you can read it. A note written offline can be edited too, before it uploads.',
+          tl: 'Sa Aking mga tala, pindutin ang I-edit sa tabi ng isang tala para baguhin ang paksa o mga salita nito, saka I-save ang pagbabago. Mananatili ang petsa ng tala at ang paglagong naibigay na nito sa iyong puno, at mananatili itong naka-lock kaya ikaw lang ang makakabasa. Maaari ring i-edit ang talang isinulat offline, bago pa ito ma-upload.',
+        },
+      },
+    ],
+  },
+  {
     id: '2026-11-16-more-trees',
     date: '2026-11-16',
     title: { en: 'Twelve new trees', tl: 'Labindalawang bagong puno' },

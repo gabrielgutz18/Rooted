@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { backend, type AdminUser, type Entry, type EntryInput, type NoteLock, type Profile } from './lib/backend';
+import { backend, type AdminUser, type Entry, type EntryEdit, type EntryInput, type NoteLock, type Profile } from './lib/backend';
 import { ARRIVALS, dayKey, dayStats, dayStreak, stageFor, type DayStat } from './lib/growth';
 import { dayOf, daysIdle, lastDayOf } from './lib/streak';
 import { errorText, strings, useT } from './lib/i18n';
@@ -15,10 +15,11 @@ import UpdateNotice from './components/UpdateNotice';
 import { hasUnseenUpdate, markUpdatesSeen } from './lib/updates';
 import { RecoveryDialog, UnlockPanel } from './components/Unlock';
 import UsernameDialog from './components/UsernameDialog';
+import ProfileDialog from './components/ProfileDialog';
 import { speciesOf } from './scene/species';
 import { useInstall } from './lib/install';
 import { clearSnapshots, readSnapshot, writeSnapshot } from './lib/cache';
-import { addToOutbox, asEntry, clearOutbox, isOffline, readOutbox, removeFromOutbox, withPending, withTimeout } from './lib/outbox';
+import { addToOutbox, asEntry, clearOutbox, editInOutbox, isOffline, readOutbox, removeFromOutbox, withPending, withTimeout } from './lib/outbox';
 
 const cloud = backend.mode === 'cloud';
 
@@ -71,6 +72,7 @@ function Garden({ userId }: { userId: string }) {
   const [updatesOpen, setUpdatesOpen] = useState(false);
   const [updateUnseen, setUpdateUnseen] = useState(hasUnseenUpdate);
   const [nameLater, setNameLater] = useState(false);
+  const [profileOpen, setProfileOpen] = useState(false);
   const install = useInstall();
   const askedTree = useRef(false);
   const hero = useRef<HeroHandle>(null);
@@ -104,7 +106,14 @@ function Garden({ userId }: { userId: string }) {
     try {
       for (const { id, created_at, ...input } of waiting) {
         try {
-          const saved = await withTimeout(backend.addEntry(input, { id, created_at }), 15000);
+          let saved = await withTimeout(backend.addEntry(input, { id, created_at }), 15000);
+          // edited while it was uploading: save the newer words too before letting it go
+          const now = readOutbox(userId).find((n) => n.id === id);
+          if (now && (now.subject !== saved.subject || now.note !== saved.note)) {
+            const edit = { subject: now.subject, note: now.note, tags: now.tags };
+            await withTimeout(backend.editEntry(id, edit), 15000);
+            saved = { ...saved, ...edit };
+          }
           removeFromOutbox(userId, id);
           setEntries((list) => list.map((e) => (e.id === id ? saved : e)));
           uploaded++;
@@ -134,7 +143,9 @@ function Garden({ userId }: { userId: string }) {
       setEntries([]);
       return backend.activity(userId).then(setLockedDays);
     });
-    Promise.all([backend.profile(userId).then(setMe), notes, loadPeople()])
+    // Offline, these requests can take ~30 s to fail; the tree from last time is already
+    // showing, so say so sooner. (Anything that does arrive later is still used.)
+    withTimeout(Promise.all([backend.profile(userId).then(setMe), notes, loadPeople()]), 10000)
       .then(() => syncNow())
       .catch((err) => setError(snap ? strings().showingCached : message(err)))
       .finally(() => setLoading(false));
@@ -233,8 +244,12 @@ function Garden({ userId }: { userId: string }) {
 
   function namePicked(username: string) {
     setMe((m) => (m ? { ...m, username } : m));
+    setPeople((list) => list.map((p) => (p.id === userId ? { ...p, username } : p)));
     setNotice(t.usernameSaved(username));
   }
+  const closeProfile = useCallback(() => setProfileOpen(false), []);
+  // an older email account that hasn't picked a username yet (see needsName)
+  const canAddName = !!me && !me.is_admin && me.username === null;
 
   const open = !lock || lock.open; // while checking, the copy from last time is shown
   const points = useMemo(() => (open ? entries.reduce((s, e) => s + e.points, 0) : (me?.points ?? 0)), [open, entries, me]);
@@ -271,6 +286,21 @@ function Garden({ userId }: { userId: string }) {
     });
     window.scrollTo({ top: 0, behavior: 'smooth' });
     if (!created.pending) loadPeople().catch(() => {});
+  }
+
+  /** Throws so the edit form stays open (with the words) when it can't be saved. */
+  async function edit(id: string, change: EntryEdit) {
+    if (cloud && readOutbox(userId).some((n) => n.id === id)) {
+      editInOutbox(userId, id, change); // not uploaded yet: it uploads with the new words
+    } else {
+      try {
+        await withTimeout(backend.editEntry(id, change), 12000);
+      } catch (err) {
+        if (cloud && isOffline(err)) throw new Error(t.editNeedsOnline);
+        throw err;
+      }
+    }
+    setEntries((list) => list.map((e) => (e.id === id ? { ...e, ...change } : e)));
   }
 
   async function remove(id: string) {
@@ -325,6 +355,18 @@ function Garden({ userId }: { userId: string }) {
           <button className={`side-link ${view.kind === 'home' ? 'is-on' : ''}`} onClick={() => go({ kind: 'home' })}>
             {t.myTree}
           </button>
+          {me && (
+            <button
+              className="side-link"
+              onClick={() => {
+                setMenuOpen(false);
+                setProfileOpen(true);
+              }}
+            >
+              {t.profileMenu}
+              {canAddName && <span className="new-tag">{t.addUsernameTag}</span>}
+            </button>
+          )}
           <button
             className="side-link"
             onClick={() => {
@@ -418,7 +460,7 @@ function Garden({ userId }: { userId: string }) {
                 </div>
                 <Heatmap days={myDays} />
               </section>
-              {open && <Notes entries={entries} loading={loading} onDelete={remove} />}
+              {open && <Notes entries={entries} loading={loading} onEdit={edit} onDelete={remove} />}
             </>
           )}
 
@@ -445,6 +487,20 @@ function Garden({ userId }: { userId: string }) {
 
       {needsName && <UsernameDialog onDone={namePicked} onLater={() => setNameLater(true)} />}
       {!needsName && picking && <TreePicker current={me?.tree} first={me?.tree == null} hour={hourParam} onPick={chooseTree} onClose={closePicker} />}
+      {!needsName && profileOpen && me && (
+        <ProfileDialog
+          me={me}
+          points={points}
+          notes={open ? entries.length : me.entry_count}
+          streak={myStreak}
+          onUsername={namePicked}
+          onChangeTree={() => {
+            setProfileOpen(false);
+            setPicking(true);
+          }}
+          onClose={closeProfile}
+        />
+      )}
       {updatesOpen && <UpdateNotice onClose={closeUpdates} />}
       {installHelp && <InstallDialog platform={install.platform} onClose={() => setInstallHelp(false)} />}
       {recovery && <RecoveryDialog key={recovery.code ?? 'new'} code={recovery.code} onClose={closeRecovery} />}

@@ -1,7 +1,7 @@
-import { useEffect, useMemo, useState, type FormEvent } from 'react';
+import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
 import { analyze, type Part } from '../lib/analyze';
 import { errorText, tagName, useT, type Strings } from '../lib/i18n';
-import { backend, type Entry, type EntryInput } from '../lib/backend';
+import { backend, type Entry, type EntryEdit, type EntryInput } from '../lib/backend';
 import { checkNote, noteLimit, NOTES_PER_DAY, type LimitIssue, type NoteIssue } from '../lib/spam';
 
 const partLabel = (t: Strings, p: Part) =>
@@ -155,11 +155,118 @@ export function Composer({ entries, onSave }: { entries: Entry[]; onSave(input: 
   );
 }
 
-export function Notes({ entries, loading, onDelete }: { entries: Entry[]; loading: boolean; onDelete(id: string): Promise<void> }) {
+const saveError = (err: unknown): Problem => ({
+  save: err && typeof err === 'object' && 'message' in err ? String((err as { message: unknown }).message) : '',
+});
+
+/**
+ * Rewrites an older note in place. Only the words change: the note keeps its date and the
+ * growth it earned (so editing can't be used to grow the tree), and its tags follow the new words.
+ */
+function EditNote({ entry, onSave, onCancel }: { entry: Entry; onSave(edit: EntryEdit): Promise<void>; onCancel(): void }) {
+  const t = useT();
+  const [subject, setSubject] = useState(entry.subject);
+  const [note, setNote] = useState(entry.note);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<Problem | null>(null);
+  const body = useRef<HTMLTextAreaElement>(null);
+
+  useEffect(() => {
+    const el = body.current;
+    if (!el) return;
+    el.focus();
+    el.setSelectionRange(el.value.length, el.value.length);
+  }, []);
+
+  async function submit(e: FormEvent) {
+    e.preventDefault();
+    if (!subject.trim() && !note.trim()) return setError({ empty: true });
+    const issue = checkNote(subject, note);
+    if (issue) return setError({ issue });
+    const next = { subject: subject.trim() || entry.subject, note: note.trim() };
+    if (next.subject === entry.subject && next.note === entry.note) return onCancel(); // nothing changed
+    setBusy(true);
+    setError(null);
+    try {
+      await onSave({ ...next, tags: analyze(next.subject, next.note).tags });
+    } catch (err) {
+      setError(saveError(err));
+      setBusy(false);
+    }
+  }
+
+  return (
+    <form
+      className="note-edit"
+      onSubmit={submit}
+      aria-label={t.editNote(entry.subject)}
+      onKeyDown={(e) => {
+        if (e.key === 'Escape' && !busy) onCancel();
+      }}
+    >
+      <label className="field">
+        <span className="field-label">{t.subject}</span>
+        <input
+          type="text"
+          value={subject}
+          maxLength={200}
+          placeholder={entry.subject}
+          onChange={(e) => {
+            setSubject(e.target.value);
+            setError(null);
+          }}
+        />
+      </label>
+      <label className="field">
+        <span className="field-label">{t.note}</span>
+        <textarea
+          ref={body}
+          value={note}
+          rows={6}
+          maxLength={20000}
+          placeholder={t.notePlaceholder}
+          onChange={(e) => {
+            setNote(e.target.value);
+            setError(null);
+          }}
+        />
+      </label>
+      {error && (
+        <p className="form-error" role="alert">
+          {problemText(t, error)}
+        </p>
+      )}
+      <div className="composer-foot">
+        <span className="muted small">{t.editKeeps}</span>
+        <span className="note-edit-actions">
+          <button type="button" className="btn btn-small" onClick={onCancel} disabled={busy}>
+            {t.cancel}
+          </button>
+          <button className="btn btn-primary btn-small" disabled={busy}>
+            {busy ? t.saving : t.saveChanges}
+          </button>
+        </span>
+      </div>
+    </form>
+  );
+}
+
+export function Notes({
+  entries,
+  loading,
+  onEdit,
+  onDelete,
+}: {
+  entries: Entry[];
+  loading: boolean;
+  onEdit(id: string, edit: EntryEdit): Promise<void>;
+  onDelete(id: string): Promise<void>;
+}) {
   const t = useT();
   const [query, setQuery] = useState('');
   const [confirm, setConfirm] = useState<string | null>(null);
   const [open, setOpen] = useState<string | null>(null);
+  const [editing, setEditing] = useState<string | null>(null);
   const stampFmt = useMemo(
     () => new Intl.DateTimeFormat(t.locale, { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' }),
     [t.locale],
@@ -201,6 +308,19 @@ export function Notes({ entries, loading, onDelete }: { entries: Entry[]; loadin
           {visible.map((e) => {
             const long = e.note.length > 280;
             const expanded = open === e.id;
+            if (editing === e.id)
+              return (
+                <li key={e.id} className="note is-editing">
+                  <time className="muted small" dateTime={e.created_at}>
+                    {stampFmt.format(new Date(e.created_at))}
+                  </time>
+                  <EditNote
+                    entry={e}
+                    onCancel={() => setEditing(null)}
+                    onSave={(change) => onEdit(e.id, change).then(() => setEditing(null))}
+                  />
+                </li>
+              );
             return (
               <li key={e.id} className="note">
                 <div className="note-head">
@@ -229,6 +349,18 @@ export function Notes({ entries, loading, onDelete }: { entries: Entry[]; loadin
                     {long && (
                       <button className="link" onClick={() => setOpen(expanded ? null : e.id)}>
                         {expanded ? t.showLess : t.readMore}
+                      </button>
+                    )}
+                    {!e.locked && confirm !== e.id && (
+                      <button
+                        className="link"
+                        onClick={() => {
+                          setEditing(e.id);
+                          setConfirm(null);
+                        }}
+                        aria-label={t.editNote(e.subject)}
+                      >
+                        {t.editBtn}
                       </button>
                     )}
                     {confirm === e.id ? (
