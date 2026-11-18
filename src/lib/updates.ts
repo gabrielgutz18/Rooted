@@ -37,6 +37,7 @@ import lampPostMine from '../assets/updates/lamp-post-mine.png';
 import lampPostFriend from '../assets/updates/lamp-post-friend.png';
 import lampPostNight from '../assets/updates/lamp-post-night.png';
 import streakCardHidden from '../assets/updates/streak-card-hidden.png';
+import profileIcons from '../assets/updates/profile-icons.png';
 
 type Text = Record<Lang, string>;
 
@@ -67,6 +68,30 @@ const days = (n: number): Text => ({ en: `${n} ${n === 1 ? 'day' : 'days'}`, tl:
 const cap = (s: string) => s[0].toUpperCase() + s.slice(1);
 
 export const UPDATES: Update[] = [
+  {
+    id: '2026-11-18-profile-icons',
+    date: '2026-11-18',
+    title: { en: 'Profile icons', tl: 'Mga icon ng profile' },
+    intro: {
+      en: 'Pick a little pixel picture to stand beside your name — a crown, a dove, a cat in sunglasses, a snowman and more — on the colour you like.',
+      tl: 'Pumili ng maliit na pixel na larawan na tatabi sa iyong pangalan — korona, kalapati, pusang naka-shades, taong-niyebe at iba pa — sa kulay na gusto mo.',
+    },
+    sections: [
+      {
+        heading: { en: 'Choose your icon', tl: 'Pumili ng iyong icon' },
+        text: {
+          en: 'Open Menu → My profile and press Change beside Your icon. There are forty-one to choose from, from a DJ cat with headphones to a hot-air balloon, and each sits on its own colour. Pick a different background if you like — sky, rose, mint, night and more — or none at all. Your friends see it next to your name in their list and on your profile, and you can switch any time.',
+          tl: 'Buksan ang Menu → Aking profile at pindutin ang Palitan sa tabi ng Iyong icon. May apatnapu’t isang mapagpipilian, mula sa DJ na pusang may headphones hanggang sa lobo, at bawat isa ay may sariling kulay. Pumili ng ibang kulay sa likod kung gusto mo — langit, rosas, mint, gabi at iba pa — o wala. Makikita ito ng iyong mga kaibigan sa tabi ng iyong pangalan sa kanilang listahan at sa iyong profile, at mapapalitan mo ito anumang oras.',
+        },
+        pictures: [
+          {
+            src: profileIcons,
+            alt: { en: 'My profile with the DJ cat chosen, the grid of pixel icons and the row of background colours', tl: 'Ang Aking profile na napili ang DJ na pusa, ang mga pixel na icon at ang mga kulay sa likod' },
+          },
+        ],
+      },
+    ],
+  },
   {
     id: '2026-11-18-edit-notes',
     date: '2026-11-18',

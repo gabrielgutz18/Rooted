@@ -9,6 +9,7 @@ import { SPECIES, type SpeciesId } from '../scene/species';
 import { LANDS } from '../scene/lands';
 import { ARRIVALS, STAGES, SUBJECT_PROMPTS, VERSES } from './growth';
 import { LEAVES_GONE_DAYS, type FlameId } from './streak';
+import type { AvatarId, BackdropId } from './avatars';
 
 export type Lang = 'en' | 'tl';
 
@@ -79,6 +80,9 @@ const en = {
       : `No notes for ${days} days — your tree is losing its leaves. Write one to bring them back.`,
   wiltingTheirs: (name: string) => `${name}’s tree is losing its leaves.`,
   theirProgress: (name: string) => `${name}’s progress`,
+  viewProfile: 'View profile',
+  theirProfile: (name: string) => `${name}’s profile`,
+  noNotesYet: 'No notes yet',
   statGrowth: 'growth',
   statNotes: 'notes',
   statStage: 'stage',
@@ -234,6 +238,32 @@ const en = {
   // your profile (Menu → My profile)
   profileMenu: 'My profile',
   profileTitle: 'Your profile',
+  // profile icons (src/lib/avatars.ts)
+  iconTitle: 'Your icon',
+  iconChoose: 'Choose your icon',
+  iconChange: 'Change your icon',
+  iconHint: 'It shows beside your name, for you and your friends.',
+  iconOf: (name: string) => `${name}’s icon`,
+  iconPick: (icon: string) => `Icon: ${icon}`,
+  iconNone: 'No icon',
+  iconNoneHint: 'Show the first letter of your name instead',
+  avatars: {
+    bottle: 'Bottle', ball: 'Ball', crown: 'Crown', book: 'Book', bread: 'Bread', shoes: 'Shoes', dove: 'Dove', fish: 'Fish',
+    sheep: 'Sheep', mug: 'Mug', star: 'Star', heart: 'Heart', sunflower: 'Sunflower', apple: 'Apple', guitar: 'Guitar', cat: 'Cat',
+    note: 'Music note', mushroom: 'Mushroom', rocket: 'Rocket', cake: 'Cake', coolcat: 'Cool cat', djcat: 'DJ cat', tree: 'Tree',
+    snowman: 'Snowman', cap: 'Cap', frog: 'Frog', owl: 'Owl', penguin: 'Penguin', bunny: 'Bunny', dog: 'Puppy', bear: 'Bear',
+    donut: 'Donut', icecream: 'Ice cream', watermelon: 'Watermelon', cactus: 'Cactus', moon: 'Moon and stars', rainbow: 'Rainbow',
+    umbrella: 'Umbrella', balloon: 'Hot-air balloon', gamepad: 'Game controller', church: 'Church',
+  } as Record<AvatarId, string>,
+  bgTitle: 'Background',
+  bgOwn: 'Its own colour',
+  bgOwnHint: 'Background: the icon’s own colour',
+  bgPick: (colour: string) => `Background: ${colour}`,
+  backdrops: {
+    sky: 'Sky', rose: 'Rose', mint: 'Mint', lemon: 'Lemon', lilac: 'Lilac', peach: 'Peach', cream: 'Cream', navy: 'Navy',
+    night: 'Night', berry: 'Berry', forest: 'Forest', clear: 'No background',
+  } as Record<BackdropId, string>,
+  done: 'Done',
   addUsernameTag: 'Add username',
   noUsernameYet: 'None yet',
   signInWith: 'Sign in with',
@@ -395,6 +425,9 @@ const tl: Strings = {
       : `${days} araw nang walang tala — nalalagas ang mga dahon ng puno mo. Sumulat para bumalik ang mga ito.`,
   wiltingTheirs: (name) => `Nalalagas ang mga dahon ng puno ni ${name}.`,
   theirProgress: (name) => `Pag-unlad ni ${name}`,
+  viewProfile: 'Tingnan ang profile',
+  theirProfile: (name) => `Profile ni ${name}`,
+  noNotesYet: 'Wala pang tala',
   statGrowth: 'paglago',
   statNotes: 'tala',
   statStage: 'yugto',
@@ -588,6 +621,31 @@ const tl: Strings = {
 
   profileMenu: 'Aking profile',
   profileTitle: 'Iyong profile',
+  iconTitle: 'Iyong icon',
+  iconChoose: 'Pumili ng iyong icon',
+  iconChange: 'Palitan ang iyong icon',
+  iconHint: 'Makikita ito sa tabi ng iyong pangalan, para sa iyo at sa iyong mga kaibigan.',
+  iconOf: (name) => `Icon ni ${name}`,
+  iconPick: (icon) => `Icon: ${icon}`,
+  iconNone: 'Walang icon',
+  iconNoneHint: 'Ipakita na lang ang unang titik ng iyong pangalan',
+  avatars: {
+    bottle: 'Bote', ball: 'Bola', crown: 'Korona', book: 'Aklat', bread: 'Tinapay', shoes: 'Sapatos', dove: 'Kalapati', fish: 'Isda',
+    sheep: 'Tupa', mug: 'Tasa', star: 'Bituin', heart: 'Puso', sunflower: 'Mirasol', apple: 'Mansanas', guitar: 'Gitara', cat: 'Pusa',
+    note: 'Nota', mushroom: 'Kabute', rocket: 'Rocket', cake: 'Keyk', coolcat: 'Astig na pusa', djcat: 'DJ na pusa', tree: 'Puno',
+    snowman: 'Taong-niyebe', cap: 'Sumbrero', frog: 'Palaka', owl: 'Kuwago', penguin: 'Penguin', bunny: 'Kuneho', dog: 'Tuta', bear: 'Oso',
+    donut: 'Donut', icecream: 'Sorbetes', watermelon: 'Pakwan', cactus: 'Kaktus', moon: 'Buwan at bituin', rainbow: 'Bahaghari',
+    umbrella: 'Payong', balloon: 'Lobo', gamepad: 'Controller', church: 'Simbahan',
+  },
+  bgTitle: 'Kulay sa likod',
+  bgOwn: 'Sariling kulay',
+  bgOwnHint: 'Kulay sa likod: ang sariling kulay ng icon',
+  bgPick: (colour) => `Kulay sa likod: ${colour}`,
+  backdrops: {
+    sky: 'Langit', rose: 'Rosas', mint: 'Mint', lemon: 'Limon', lilac: 'Lila', peach: 'Melokoton', cream: 'Krema', navy: 'Dagat',
+    night: 'Gabi', berry: 'Berry', forest: 'Gubat', clear: 'Walang kulay',
+  },
+  done: 'Tapos na',
   addUsernameTag: 'Magdagdag ng username',
   noUsernameYet: 'Wala pa',
   signInWith: 'Pag-sign in gamit ang',
@@ -718,6 +776,8 @@ const tl: Strings = {
     'Reset your own password from the Supabase dashboard.': 'I-reset ang sarili mong password mula sa Supabase dashboard.',
     'Usernames need the latest server update (supabase/functions/account and 20261120000000_usernames.sql) — ask the admin to set it up.':
       'Kailangan ng pinakabagong server update (supabase/functions/account at 20261120000000_usernames.sql) para sa mga username — pakisabi sa admin na i-set up ito.',
+    'Profile icons need the latest database update (supabase/migrations/20261121000000_avatars.sql) — ask the admin to run it.':
+      'Kailangan ng pinakabagong database update (supabase/migrations/20261121000000_avatars.sql) para sa mga icon — pakisabi sa admin na patakbuhin ito.',
     'Choosing a tree needs the latest database update (supabase/migrations) — ask the admin to run it.':
       'Kailangan ng pinakabagong database update (supabase/migrations) para makapili ng puno — pakisabi sa admin na patakbuhin ito.',
     "You're offline and this browser couldn't keep the note. Copy it somewhere safe and try again when you're online.":

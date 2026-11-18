@@ -1889,3 +1889,150 @@ p {
   color: var(--danger);
   font-weight: 700;
 }
+
+/* My profile, inside the side menu (in place of the links and friends) */
+.side-profile {
+  flex: 1;
+  display: grid;
+  gap: 14px;
+  align-content: start;
+}
+.side-profile-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.side-profile-head .side-title {
+  margin: 0;
+}
+.side-profile .profile-name {
+  font-size: 22px;
+}
+.profile-stats {
+  gap: 6px;
+}
+.profile-stats .stat {
+  padding: 7px 6px;
+}
+.profile-stats .stat-value {
+  font-size: 19px;
+}
+.profile-stats .stat-label {
+  font-size: 11px;
+  line-height: 1.2;
+}
+/* the menu is narrow: each fact's label sits above its value */
+.side-profile .profile-facts > div {
+  grid-template-columns: minmax(0, 1fr);
+  gap: 2px;
+  padding: 7px 0;
+}
+.side-profile .profile-facts dd {
+  font-size: 15px;
+}
+.profile-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+}
+.side-profile .profile-add {
+  gap: 6px;
+}
+.side-profile .profile-add p {
+  font-size: 13px;
+}
+
+/* profile icons (src/lib/avatars.ts, src/components/Avatar.tsx) */
+.avatar {
+  display: inline-block;
+  flex: none;
+  vertical-align: middle;
+  image-rendering: pixelated;
+}
+.avatar text {
+  font-family: var(--font-px);
+  font-weight: 700;
+}
+/* the first letter with no tile colour chosen: the app's own accent */
+.avatar-letter.avatar-plain {
+  background: var(--accent);
+  box-shadow: inset 0 0 0 2px var(--line);
+}
+.avatar-letter.avatar-plain text {
+  fill: var(--accent-ink);
+}
+.side-me {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 4px;
+}
+.friend:has(> .avatar) {
+  grid-template-columns: auto minmax(0, 1fr);
+  column-gap: 10px;
+  align-items: center;
+  padding-left: 8px;
+}
+.friend > .avatar {
+  grid-row: span 2;
+}
+.friend > .friend-name,
+.friend > .friend-meta {
+  grid-column: 2;
+}
+.profile-head:has(> .avatar) {
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  column-gap: 12px;
+}
+.icon-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(42px, 1fr));
+  gap: 6px;
+  /* forty-odd icons: scroll inside, about five rows at a time */
+  max-height: 250px;
+  overflow-y: auto;
+  padding: 2px;
+  scrollbar-gutter: stable;
+}
+.bg-grid {
+  max-height: none;
+  overflow: visible;
+}
+.icon-done {
+  justify-self: end;
+}
+.icon-choice {
+  display: grid;
+  place-items: center;
+  aspect-ratio: 1;
+  padding: 2px;
+  border: 0;
+  margin: 2px;
+  min-width: 0;
+  cursor: pointer;
+  background: var(--panel-2);
+  box-shadow: 0 0 0 2px var(--line);
+}
+.icon-choice:hover {
+  filter: brightness(1.08);
+}
+.icon-choice:hover .avatar,
+.icon-choice:focus-visible .avatar {
+  transform: translateY(-2px);
+}
+.icon-choice[aria-pressed='true'] {
+  background: var(--accent);
+  box-shadow: 0 0 0 2px var(--line), inset 0 0 0 3px var(--accent-ink);
+}
+.icon-choice:focus-visible {
+  outline: 3px dashed var(--accent);
+  outline-offset: 2px;
+}
+@media (prefers-reduced-motion: no-preference) {
+  .icon-choice .avatar {
+    transition: transform 0.12s steps(2);
+  }
+}

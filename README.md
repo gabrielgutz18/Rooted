@@ -170,7 +170,8 @@ setting the same two `VITE_SUPABASE_…` variables there.
 | Unlock screen and recovery key dialog | `src/components/Unlock.tsx` |
 | Username rules and the stand-in email | `src/lib/username.ts` |
 | Picking or changing a username (checks it's free as you type) | `src/components/UsernameDialog.tsx` |
-| Your profile (Menu → My profile) | `src/components/ProfileDialog.tsx` |
+| Your profile (Menu → My profile, opens inside the side menu) | `src/components/ProfilePanel.tsx` |
+| Profile icons: the pixel art, background colours and how they're drawn | `src/lib/avatars.ts`, `src/components/Avatar.tsx` |
 | Choosing or changing a username, password resets (server) | `supabase/functions/account/index.ts` |
 
 ## Privacy

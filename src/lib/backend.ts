@@ -6,6 +6,7 @@ import type { PostgrestError } from '@supabase/supabase-js';
 import { storedUser, supabase } from './supabase';
 import { dayStats, type DayStat } from './growth';
 import * as vault from './vault';
+import { isAvatarValue } from './avatars';
 import { isOffline, withTimeout } from './outbox';
 import { BAD_USERNAME, USERNAME_DOMAIN, isValidUsername, loginEmail, normalizeUsername, usernameEmail } from './username';
 
@@ -20,6 +21,8 @@ export interface Profile {
   tree?: string | null; // which kind of tree they grow; null until they choose
   /** What they sign in with. null: an older account that hasn't picked one yet (or the admin). */
   username?: string | null;
+  /** Their profile icon (src/lib/avatars.ts); null until they choose, undefined before that update. */
+  avatar?: string | null;
 }
 
 export interface AdminUser extends Profile {
@@ -87,6 +90,8 @@ export interface Backend {
   profile(id: string): Promise<Profile>;
   listProfiles(): Promise<Profile[]>;
   setTree(tree: string): Promise<void>;
+  /** Your profile icon (one of src/lib/avatars.ts), or null for none. */
+  setAvatar(avatar: string | null): Promise<void>;
   listEntries(): Promise<Entry[]>;
   addEntry(input: EntryInput, keep?: KeepAs): Promise<Entry>;
   /** Rewrites a saved note's subject, note and tags (locked again with the same key). */
@@ -111,6 +116,7 @@ const NEEDS_UPDATE =
   'Private notes need the latest database update (supabase/migrations/20261118000000_private_notes.sql) — ask the admin to run it.';
 const NEEDS_ACCOUNT_SERVER =
   'Usernames need the latest server update (supabase/functions/account and 20261120000000_usernames.sql) — ask the admin to set it up.';
+const NEEDS_AVATARS = 'Profile icons need the latest database update (supabase/migrations/20261121000000_avatars.sql) — ask the admin to run it.';
 const TAKEN = 'That username is taken.';
 const WRONG_LOGIN = 'Wrong username or password.';
 const LOCKED_SUBJECT = 'locked'; // what the database holds in place of a locked note's subject
@@ -133,7 +139,7 @@ function cloud(): Backend {
   const sb = supabase!;
   const BASE = 'id, display_name, is_admin, points, entry_count, last_entry_at, created_at';
   // Newest columns first; each one is dropped while its migration hasn't been run yet.
-  const COLS = [`${BASE}, tree, username`, `${BASE}, tree`, BASE];
+  const COLS = [`${BASE}, tree, username, avatar`, `${BASE}, tree, username`, `${BASE}, tree`, BASE];
   let level = 0;
   const E = 'id, subject, note, points, tags, created_at, sealed';
   const K = 'salt, iterations, wrapped, recovery_salt, recovery';
@@ -299,7 +305,7 @@ function cloud(): Backend {
   async function profiles<T>(run: (cols: string) => PromiseLike<{ data: unknown; error: PostgrestError | null }>): Promise<T> {
     for (;;) {
       const { data, error } = await run(COLS[level]);
-      if (error && level < COLS.length - 1 && (error.code === '42703' || /\b(tree|username)\b/.test(error.message))) {
+      if (error && level < COLS.length - 1 && (error.code === '42703' || /\b(tree|username|avatar)\b/.test(error.message))) {
         level++;
         continue;
       }
@@ -414,6 +420,15 @@ function cloud(): Backend {
       if (error) {
         if (error.code === '42703' || /\btree\b/.test(error.message))
           throw new Error('Choosing a tree needs the latest database update (supabase/migrations) — ask the admin to run it.');
+        throw error;
+      }
+    },
+    async setAvatar(avatar) {
+      if (avatar !== null && !isAvatarValue(avatar)) throw new Error('Unknown icon');
+      const { id } = await me();
+      const { error } = await sb.from('profiles').update({ avatar }).eq('id', id);
+      if (error) {
+        if (error.code === '42703' || /\bavatar\b/.test(error.message)) throw new Error(NEEDS_AVATARS);
         throw error;
       }
     },
@@ -535,7 +550,7 @@ function cloud(): Backend {
 // ---------------- local ----------------
 
 interface LocalDB {
-  users: { id: string; name: string; username?: string | null; email?: string; is_admin: boolean; created_at: string; tree?: string | null }[];
+  users: { id: string; name: string; username?: string | null; email?: string; is_admin: boolean; created_at: string; tree?: string | null; avatar?: string | null }[];
   entries: (Entry & { user_id: string })[];
   session: string | null;
 }
@@ -564,7 +579,7 @@ function local(): Backend {
   const toProfile = (db: LocalDB, u: LocalDB['users'][number]): Profile => {
     const mine = db.entries.filter((e) => e.user_id === u.id);
     return {
-      id: u.id, display_name: u.name, is_admin: u.is_admin, created_at: u.created_at, tree: u.tree ?? null, username: u.username ?? null,
+      id: u.id, display_name: u.name, is_admin: u.is_admin, created_at: u.created_at, tree: u.tree ?? null, username: u.username ?? null, avatar: u.avatar ?? null,
       points: mine.reduce((s, e) => s + e.points, 0), entry_count: mine.length,
       last_entry_at: mine.map((e) => e.created_at).sort().pop() ?? null,
     };
@@ -664,6 +679,14 @@ function local(): Backend {
       const user = db.users.find((u) => u.id === me(db));
       if (!user) throw new Error('Not signed in');
       user.tree = tree;
+      write(db);
+    },
+    async setAvatar(avatar) {
+      if (avatar !== null && !isAvatarValue(avatar)) throw new Error('Unknown icon');
+      const db = read();
+      const user = db.users.find((u) => u.id === me(db));
+      if (!user) throw new Error('Not signed in');
+      user.avatar = avatar;
       write(db);
     },
     async listEntries() {

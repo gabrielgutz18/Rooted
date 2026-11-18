@@ -1,7 +1,8 @@
-// Menu → My profile, for an older account that still signs in with an email: it can add a
+// Menu → My profile opens inside the side menu, in place of the links. For an older account that still signs in with an email: it can add a
 // username there (any time after "Not now"), then sign in with it.
 
 import { expect, test } from '@playwright/test';
+import { seed } from './seed';
 
 const SHOTS = 'e2e/screenshots';
 
@@ -31,13 +32,13 @@ test('an older email account adds a username from its profile, then signs in wit
   await expect(menuLink).toContainText('Add username');
   await menuLink.click();
 
-  const profile = page.getByRole('dialog', { name: 'Your profile' });
+  const profile = page.locator('#side-menu').getByRole('region', { name: 'Your profile' });
   await expect(profile).toContainText('Grace');
   await expect(profile.locator('.profile-facts')).toContainText('None yet');
   await expect(profile.locator('.profile-facts')).toContainText('Your email, grace@example.com');
   await expect(profile.locator('.profile-facts')).toContainText('Sakura');
   await expect(profile.locator('.stat-grid')).toContainText('20');
-  await profile.screenshot({ path: `${SHOTS}/profile-add-username.png` });
+  await page.locator('#side-menu').screenshot({ path: `${SHOTS}/profile-add-username.png` });
 
   // someone else's username is refused
   await profile.getByRole('textbox', { name: /Username/ }).fill('admin');
@@ -49,7 +50,7 @@ test('an older email account adds a username from its profile, then signs in wit
   await expect(page.getByRole('status')).toHaveText('Done — sign in as “grace_g” from now on.');
   await expect(profile.locator('.profile-facts')).toContainText('Your username, “grace_g”');
   await expect(profile.getByRole('heading', { name: 'Add a username' })).toHaveCount(0);
-  await profile.screenshot({ path: `${SHOTS}/profile-with-username.png` });
+  await page.locator('#side-menu').screenshot({ path: `${SHOTS}/profile-with-username.png` });
 
   await page.keyboard.press('Escape');
   await expect(profile).toHaveCount(0);
@@ -76,7 +77,7 @@ test('the profile opens from the menu for a username account and can change the 
   });
   await page.goto('/');
   await page.getByRole('button', { name: 'My profile' }).click();
-  const profile = page.getByRole('dialog', { name: 'Your profile' });
+  const profile = page.locator('#side-menu').getByRole('region', { name: 'Your profile' });
   await expect(profile.locator('.profile-facts')).toContainText('Your username, “joy”');
   await expect(profile.getByRole('heading', { name: 'Add a username' })).toHaveCount(0);
 
@@ -102,7 +103,7 @@ test('a username can be changed like a handle: checked as you type, and only the
   await page.goto('/');
   await expect(page.getByText('Trial mode · this browser only')).toBeVisible();
   await page.getByRole('button', { name: 'My profile' }).click();
-  const profile = page.getByRole('dialog', { name: 'Your profile' });
+  const profile = page.locator('#side-menu').getByRole('region', { name: 'Your profile' });
   await expect(profile.locator('.profile-facts')).toContainText('@joy');
 
   await profile.getByRole('button', { name: 'Change username' }).click();
@@ -120,7 +121,7 @@ test('a username can be changed like a handle: checked as you type, and only the
 
   await field.fill('Joy_Bells');
   await expect(profile.locator('#username-status')).toHaveText('✓ @joy_bells is available');
-  await profile.screenshot({ path: `${SHOTS}/profile-change-username.png` });
+  await page.locator('#side-menu').screenshot({ path: `${SHOTS}/profile-change-username.png` });
   await save.click();
 
   await expect(page.getByRole('status')).toHaveText('Done — sign in as “joy_bells” from now on.');
@@ -153,10 +154,84 @@ test('Cancel leaves the username as it was', async ({ page }) => {
   });
   await page.goto('/');
   await page.getByRole('button', { name: 'My profile' }).click();
-  const profile = page.getByRole('dialog', { name: 'Your profile' });
+  const profile = page.locator('#side-menu').getByRole('region', { name: 'Your profile' });
   await profile.getByRole('button', { name: 'Change username' }).click();
   await profile.getByRole('textbox', { name: /New username/ }).fill('joyful');
   await profile.getByRole('button', { name: 'Cancel' }).click();
   await expect(profile.getByRole('textbox')).toHaveCount(0);
   await expect(profile.locator('.profile-facts')).toContainText('@joy');
+});
+
+test('on a phone the profile opens inside the menu drawer, and the menu reopens on its links', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.addInitScript(() => {
+    if (sessionStorage.getItem('e2e.seeded')) return;
+    sessionStorage.setItem('e2e.seeded', '1');
+    const users = [{ id: 'joy', name: 'Joy', username: 'joy', is_admin: false, created_at: '2026-03-01T09:00:00.000Z', tree: 'sakura' }];
+    localStorage.setItem('rooted.v2', JSON.stringify({ users, entries: [], session: 'joy' }));
+  });
+  await page.goto('/');
+  await page.getByRole('button', { name: /Menu/ }).click();
+  await page.getByRole('button', { name: 'My profile' }).click();
+  const profile = page.locator('#side-menu').getByRole('region', { name: 'Your profile' });
+  await expect(profile).toBeVisible();
+  await expect(page.getByRole('dialog')).toHaveCount(0); // not a box in the middle of the page
+  await expect(page.getByRole('navigation', { name: 'Main' })).toHaveCount(0);
+  await page.screenshot({ path: `${SHOTS}/profile-phone.png` });
+
+  await page.getByRole('button', { name: '← Back' }).click();
+  await expect(page.getByRole('navigation', { name: 'Main' })).toBeVisible();
+
+  // closing the drawer from the profile: it reopens on the links
+  await page.getByRole('button', { name: 'My profile' }).click();
+  await page.locator('.scrim').click({ position: { x: 370, y: 400 } });
+  await page.getByRole('button', { name: /Menu/ }).click();
+  await expect(page.getByRole('navigation', { name: 'Main' })).toBeVisible();
+});
+
+test("a friend's profile opens in the side menu while visiting their tree, without anything private", async ({ page }) => {
+  page.on('pageerror', (err) => {
+    throw err;
+  });
+  await seed(page, [
+    { name: 'Joy', streak: 1, lastNoteDaysAgo: 0 },
+    { name: 'Grace', streak: 3, lastNoteDaysAgo: 0, tree: 'sakura', session: false },
+  ]);
+  await page.goto('/');
+  await expect(page.getByText('Trial mode · this browser only')).toBeVisible();
+
+  await page.locator('.friend', { hasText: 'Grace' }).click();
+  await page.getByRole('button', { name: 'View profile' }).click();
+  const profile = page.locator('#side-menu').getByRole('region', { name: 'Grace’s profile' });
+  await expect(profile).toBeVisible();
+  await expect(profile.locator('.profile-facts')).toContainText('@grace');
+  await expect(profile.locator('.profile-facts')).toContainText('Sakura');
+  await expect(profile.locator('.stat-grid')).toContainText('4860'); // growth
+  await expect(profile.locator('.stat').nth(2)).toContainText('3'); // day streak
+  await expect(profile).toContainText('Notes are private');
+  await expect(profile).not.toContainText('Sign in with');
+  await expect(profile.getByRole('button', { name: /Change/ })).toHaveCount(0);
+  await page.locator('#side-menu').screenshot({ path: `${SHOTS}/profile-friend.png` });
+
+  await profile.getByRole('button', { name: '← Back' }).click();
+  await expect(page.locator('.friend', { hasText: 'Grace' })).toBeVisible();
+
+  // going back to your own tree closes a friend's profile
+  await page.getByRole('button', { name: 'View profile' }).click();
+  await page.getByRole('button', { name: '← My tree' }).click(); // the hero's button
+  await expect(page.locator('#side-menu').getByRole('region')).toHaveCount(0);
+});
+
+test("on a phone, View profile opens the menu drawer on the friend's profile", async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await seed(page, [
+    { name: 'Joy', streak: 1, lastNoteDaysAgo: 0 },
+    { name: 'Grace', streak: 3, lastNoteDaysAgo: 0, tree: 'sakura', session: false },
+  ]);
+  await page.goto('/');
+  await page.getByRole('button', { name: /Menu/ }).click();
+  await page.locator('.friend', { hasText: 'Grace' }).click();
+  await page.getByRole('button', { name: 'View profile' }).click();
+  await expect(page.locator('#side-menu').getByRole('region', { name: 'Grace’s profile' })).toBeInViewport();
+  await page.screenshot({ path: `${SHOTS}/profile-friend-phone.png` });
 });

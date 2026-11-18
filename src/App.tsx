@@ -15,7 +15,8 @@ import UpdateNotice from './components/UpdateNotice';
 import { hasUnseenUpdate, markUpdatesSeen } from './lib/updates';
 import { RecoveryDialog, UnlockPanel } from './components/Unlock';
 import UsernameDialog from './components/UsernameDialog';
-import ProfileDialog from './components/ProfileDialog';
+import ProfilePanel from './components/ProfilePanel';
+import { Avatar } from './components/Avatar';
 import { speciesOf } from './scene/species';
 import { useInstall } from './lib/install';
 import { clearSnapshots, readSnapshot, writeSnapshot } from './lib/cache';
@@ -72,7 +73,8 @@ function Garden({ userId }: { userId: string }) {
   const [updatesOpen, setUpdatesOpen] = useState(false);
   const [updateUnseen, setUpdateUnseen] = useState(hasUnseenUpdate);
   const [nameLater, setNameLater] = useState(false);
-  const [profileOpen, setProfileOpen] = useState(false);
+  // whose profile the side menu shows in place of its links: yours, or a friend's (by id)
+  const [profileOf, setProfileOf] = useState<string | null>(null);
   const install = useInstall();
   const askedTree = useRef(false);
   const hero = useRef<HeroHandle>(null);
@@ -230,6 +232,34 @@ function Garden({ userId }: { userId: string }) {
     }
   }
 
+  // The picker saves on every press, so saves go one after another (the last press wins on
+  // the server too). A failed save shows what is really saved, unless a newer press follows.
+  const avatarQueue = useRef<Promise<void>>(Promise.resolve());
+  const avatarSaved = useRef<string | null | undefined>(undefined);
+  const avatarLatest = useRef(0);
+  function chooseAvatar(avatar: string | null) {
+    if (!me) return;
+    const id = me.id;
+    if (avatarSaved.current === undefined) avatarSaved.current = me.avatar ?? null;
+    const show = (a: string | null) => {
+      setMe((m) => (m ? { ...m, avatar: a } : m));
+      setPeople((list) => list.map((p) => (p.id === id ? { ...p, avatar: a } : p)));
+    };
+    show(avatar);
+    const turn = ++avatarLatest.current;
+    avatarQueue.current = avatarQueue.current.then(async () => {
+      try {
+        await backend.setAvatar(avatar);
+        avatarSaved.current = avatar;
+      } catch (err) {
+        if (turn === avatarLatest.current) {
+          show(avatarSaved.current ?? null);
+          setError(message(err));
+        }
+      }
+    });
+  }
+
   const closePicker = useCallback(() => {
     // closing the first-visit picker keeps the oak
     if (me && me.tree == null) chooseTree('oak');
@@ -249,7 +279,12 @@ function Garden({ userId }: { userId: string }) {
     setPeople((list) => list.map((p) => (p.id === userId ? change(p) : p)));
     setNotice(t.usernameSaved(username));
   }
-  const closeProfile = useCallback(() => setProfileOpen(false), []);
+  const closeProfile = useCallback(() => setProfileOf(null), []);
+  // on a phone the menu closes over the page; it opens again on the links, not the profile
+  const closeMenu = () => {
+    setMenuOpen(false);
+    setProfileOf(null);
+  };
   // an older email account that hasn't picked a username yet (see needsName)
   const canAddName = !!me && !me.is_admin && me.username === null;
 
@@ -322,6 +357,7 @@ function Garden({ userId }: { userId: string }) {
   function go(next: View) {
     setView(next);
     setMenuOpen(false);
+    setProfileOf(null);
     window.scrollTo({ top: 0 });
     if (next.kind === 'visit') {
       setVisitDays(null);
@@ -342,90 +378,120 @@ function Garden({ userId }: { userId: string }) {
 
   return (
     <div className="shell">
-      <button className="btn menu-btn" onClick={() => setMenuOpen((o) => !o)} aria-expanded={menuOpen} aria-controls="side-menu">
+      <button className="btn menu-btn" onClick={() => (menuOpen ? closeMenu() : setMenuOpen(true))} aria-expanded={menuOpen} aria-controls="side-menu">
         {t.menu}
         {updateUnseen && <span className="new-dot" aria-label={t.updatesNew} />}
       </button>
-      {menuOpen && <div className="scrim" onClick={() => setMenuOpen(false)} />}
+      {menuOpen && <div className="scrim" onClick={closeMenu} />}
 
       <aside id="side-menu" className={`side ${menuOpen ? 'is-open' : ''}`}>
         <div className="side-brand">
           <h1 className="brand-title">Rooted</h1>
-          <p className="muted small">{me?.display_name ?? '…'}</p>
+          <p className="muted small side-me">
+            {me && <Avatar value={me.avatar} name={me.display_name} />}
+            {me?.display_name ?? '…'}
+          </p>
         </div>
-        <nav className="side-nav" aria-label={t.mainNav}>
-          <button className={`side-link ${view.kind === 'home' ? 'is-on' : ''}`} onClick={() => go({ kind: 'home' })}>
-            {t.myTree}
-          </button>
-          {me && (
-            <button
-              className="side-link"
-              onClick={() => {
-                setMenuOpen(false);
-                setProfileOpen(true);
-              }}
-            >
-              {t.profileMenu}
-              {canAddName && <span className="new-tag">{t.addUsernameTag}</span>}
-            </button>
-          )}
-          <button
-            className="side-link"
-            onClick={() => {
-              setMenuOpen(false);
+        {profileOf && profileOf !== userId && visiting?.id === profileOf ? (
+          // a friend's profile, while visiting their tree
+          <ProfilePanel
+            key={visiting.id}
+            me={visiting}
+            mine={false}
+            points={visiting.points}
+            notes={visiting.entry_count}
+            streak={visitDays ? dayStreak(visitDays) : undefined}
+            onBack={closeProfile}
+          />
+        ) : profileOf === userId && me ? (
+          // My profile opens here, in place of the links and friends (Back returns to them)
+          <ProfilePanel
+            key={userId}
+            me={me}
+            mine
+            points={points}
+            notes={open ? entries.length : me.entry_count}
+            streak={myStreak}
+            onUsername={namePicked}
+            onChangeTree={() => {
+              closeMenu();
               setPicking(true);
             }}
-          >
-            {t.chooseTree} · <span className="side-link-meta">{t.species[speciesOf(me?.tree).id].name}</span>
-          </button>
-          <button
-            className="side-link"
-            onClick={() => {
-              setMenuOpen(false);
-              setUpdatesOpen(true);
-              markUpdatesSeen();
-              setUpdateUnseen(false);
-            }}
-          >
-            {t.updatesMenu}
-            {updateUnseen && <span className="new-tag">{t.updatesNew}</span>}
-          </button>
-          {!install.installed && (
-            <button className="side-link" onClick={installApp}>
-              {t.installApp}
-            </button>
-          )}
-          {cloud && open && (
-            <button
-              className="side-link"
-              onClick={() => {
-                setMenuOpen(false);
-                setRecovery({ code: null });
-              }}
-            >
-              {t.recoveryMenu}
-            </button>
-          )}
-          {me?.is_admin && (
-            <button className={`side-link ${view.kind === 'admin' ? 'is-on' : ''}`} onClick={() => go({ kind: 'admin' })}>
-              {t.adminUsers}
-            </button>
-          )}
-        </nav>
-        <h2 className="side-title">{t.friends}</h2>
-        <ul className="friend-list">
-          {friends.length === 0 && <li className="muted small friend-empty">{t.noFriends}</li>}
-          {friends.map((p) => (
-            <li key={p.id}>
-              <button className={`friend ${visiting?.id === p.id ? 'is-on' : ''}`} onClick={() => go({ kind: 'visit', profile: p })} title={t.visitTree(p.display_name)}>
-                <span className="friend-name">{p.display_name}</span>
-                <span className="friend-meta">
-                  {t.species[speciesOf(p.tree).id].name} · {t.stages[stageFor(p.points).index]} · {p.points}
-                </span>
+            onAvatar={chooseAvatar}
+            onBack={closeProfile}
+          />
+        ) : (
+          <>
+            <nav className="side-nav" aria-label={t.mainNav}>
+              <button className={`side-link ${view.kind === 'home' ? 'is-on' : ''}`} onClick={() => go({ kind: 'home' })}>
+                {t.myTree}
               </button>
-            </li>
-          ))}
-        </ul>
+              {me && (
+                <button className="side-link" onClick={() => setProfileOf(userId)}>
+                  {t.profileMenu}
+                  {canAddName && <span className="new-tag">{t.addUsernameTag}</span>}
+                </button>
+              )}
+              <button
+                className="side-link"
+                onClick={() => {
+                  setMenuOpen(false);
+                  setPicking(true);
+                }}
+              >
+                {t.chooseTree} · <span className="side-link-meta">{t.species[speciesOf(me?.tree).id].name}</span>
+              </button>
+              <button
+                className="side-link"
+                onClick={() => {
+                  setMenuOpen(false);
+                  setUpdatesOpen(true);
+                  markUpdatesSeen();
+                  setUpdateUnseen(false);
+                }}
+              >
+                {t.updatesMenu}
+                {updateUnseen && <span className="new-tag">{t.updatesNew}</span>}
+              </button>
+              {!install.installed && (
+                <button className="side-link" onClick={installApp}>
+                  {t.installApp}
+                </button>
+              )}
+              {cloud && open && (
+                <button
+                  className="side-link"
+                  onClick={() => {
+                    setMenuOpen(false);
+                    setRecovery({ code: null });
+                  }}
+                >
+                  {t.recoveryMenu}
+                </button>
+              )}
+              {me?.is_admin && (
+                <button className={`side-link ${view.kind === 'admin' ? 'is-on' : ''}`} onClick={() => go({ kind: 'admin' })}>
+                  {t.adminUsers}
+                </button>
+              )}
+            </nav>
+            <h2 className="side-title">{t.friends}</h2>
+            <ul className="friend-list">
+              {friends.length === 0 && <li className="muted small friend-empty">{t.noFriends}</li>}
+              {friends.map((p) => (
+                <li key={p.id}>
+                  <button className={`friend ${visiting?.id === p.id ? 'is-on' : ''}`} onClick={() => go({ kind: 'visit', profile: p })} title={t.visitTree(p.display_name)}>
+                    <Avatar value={p.avatar} name={p.display_name} />
+                    <span className="friend-name">{p.display_name}</span>
+                    <span className="friend-meta">
+                      {t.species[speciesOf(p.tree).id].name} · {t.stages[stageFor(p.points).index]} · {p.points}
+                    </span>
+                  </button>
+                </li>
+              ))}
+            </ul>
+          </>
+        )}
         <div className="side-foot">
           <LangSwitch />
           <span className="muted small">{backend.mode === 'cloud' ? t.synced : t.trial}</span>
@@ -472,6 +538,15 @@ function Garden({ userId }: { userId: string }) {
                 <h2 id="visit-title" className="panel-title">
                   {t.theirProgress(visiting.display_name)}
                 </h2>
+                <button
+                  className="btn btn-small"
+                  onClick={() => {
+                    setProfileOf(visiting.id);
+                    setMenuOpen(true); // on a phone the profile is in the menu drawer
+                  }}
+                >
+                  {t.viewProfile}
+                </button>
               </div>
               <div className="stat-grid">
                 <Stat value={visiting.points} label={t.statGrowth} />
@@ -489,20 +564,6 @@ function Garden({ userId }: { userId: string }) {
 
       {needsName && <UsernameDialog onDone={namePicked} onLater={() => setNameLater(true)} />}
       {!needsName && picking && <TreePicker current={me?.tree} first={me?.tree == null} hour={hourParam} onPick={chooseTree} onClose={closePicker} />}
-      {!needsName && profileOpen && me && (
-        <ProfileDialog
-          me={me}
-          points={points}
-          notes={open ? entries.length : me.entry_count}
-          streak={myStreak}
-          onUsername={namePicked}
-          onChangeTree={() => {
-            setProfileOpen(false);
-            setPicking(true);
-          }}
-          onClose={closeProfile}
-        />
-      )}
       {updatesOpen && <UpdateNotice onClose={closeUpdates} />}
       {installHelp && <InstallDialog platform={install.platform} onClose={() => setInstallHelp(false)} />}
       {recovery && <RecoveryDialog key={recovery.code ?? 'new'} code={recovery.code} onClose={closeRecovery} />}
