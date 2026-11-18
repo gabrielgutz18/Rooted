@@ -132,6 +132,9 @@ Supabase automatically when the connection comes back, keeping the time they wer
    isn't a JWT. (Or, in the dashboard: Edge Functions → Deploy a new function → Via editor,
    name it `account`, paste `supabase/functions/account/index.ts`, deploy, then turn
    **Verify JWT** off in its settings.)
+
+   Deploy it again whenever `supabase/functions/account/index.ts` changes (for example,
+   changing a username needs the version with `change-username`).
 6. Restart `npm run dev`.
 
 **The first account created becomes the admin.** Create yours first, with your email:
@@ -166,8 +169,9 @@ setting the same two `VITE_SUPABASE_…` variables there.
 | Note encryption (keys, locking, recovery key) | `src/lib/vault.ts` |
 | Unlock screen and recovery key dialog | `src/components/Unlock.tsx` |
 | Username rules and the stand-in email | `src/lib/username.ts` |
-| Picking a username (older email accounts) | `src/components/UsernameDialog.tsx` |
-| Choosing a username, password resets (server) | `supabase/functions/account/index.ts` |
+| Picking or changing a username (checks it's free as you type) | `src/components/UsernameDialog.tsx` |
+| Your profile (Menu → My profile) | `src/components/ProfileDialog.tsx` |
+| Choosing or changing a username, password resets (server) | `supabase/functions/account/index.ts` |
 
 ## Privacy
 

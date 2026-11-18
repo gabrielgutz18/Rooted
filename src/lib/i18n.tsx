@@ -246,6 +246,13 @@ const en = {
   addUsernameIntro:
     'Pick a username and sign in with it from now on, instead of your email. Your password, tree and notes stay the same — only your email stops working for signing in.',
   adminKeepsEmail: 'As the admin, you keep signing in with your email.',
+  changeUsernameTitle: 'Change username',
+  changeUsernameIntro:
+    'Sign in with the new username from now on. Your old one stops working right away and anyone can take it. Your password, tree and notes stay the same.',
+  newUsername: 'New username',
+  checkingName: 'Checking…',
+  usernameFree: (name: string) => `✓ @${name} is available`,
+  usernameIsYours: "That's your username now.",
   offlineRetry: "You're offline — connect to the internet and try again.",
   pleaseWait: 'Please wait…',
   plantTree: 'Plant my tree',
@@ -593,6 +600,13 @@ const tl: Strings = {
   addUsernameIntro:
     'Pumili ng username at iyon na ang gamitin sa pag-sign in mula ngayon, sa halip na ang iyong email. Hindi magbabago ang iyong password, puno at mga tala — ang email mo lang ang hindi na gagana sa pag-sign in.',
   adminKeepsEmail: 'Bilang admin, email pa rin ang gamit mo sa pag-sign in.',
+  changeUsernameTitle: 'Palitan ang username',
+  changeUsernameIntro:
+    'Ang bagong username na ang gagamitin mo sa pag-sign in mula ngayon. Hindi na gagana agad ang luma, at puwede na itong kunin ng iba. Hindi magbabago ang iyong password, puno at mga tala.',
+  newUsername: 'Bagong username',
+  checkingName: 'Tinitingnan…',
+  usernameFree: (name) => `✓ Puwede ang @${name}`,
+  usernameIsYours: 'Iyan na ang username mo ngayon.',
   offlineRetry: 'Offline ka — kumonekta sa internet at subukan ulit.',
   pleaseWait: 'Sandali lang…',
   plantTree: 'Itanim ang aking puno',
@@ -699,6 +713,8 @@ const tl: Strings = {
       'Hindi kayang i-reset ng recovery key ng account na ito ang password. Pakisabi sa admin na i-reset ito.',
     'The admin keeps signing in with email.': 'Email pa rin ang gamit ng admin sa pag-sign in.',
     'You already have a username.': 'May username ka na.',
+    "That's already your username.": 'Iyan na ang username mo ngayon.',
+    'Pick a username first.': 'Pumili muna ng username.',
     'Reset your own password from the Supabase dashboard.': 'I-reset ang sarili mong password mula sa Supabase dashboard.',
     'Usernames need the latest server update (supabase/functions/account and 20261120000000_usernames.sql) — ask the admin to set it up.':
       'Kailangan ng pinakabagong server update (supabase/functions/account at 20261120000000_usernames.sql) para sa mga username — pakisabi sa admin na i-set up ito.',

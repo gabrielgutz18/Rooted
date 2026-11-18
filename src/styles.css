@@ -1857,3 +1857,35 @@ p {
     gap: 2px;
   }
 }
+
+/* a username field with "@" in front, and whether it's free */
+.handle-input {
+  display: flex;
+  align-items: stretch;
+}
+.handle-at {
+  display: grid;
+  place-items: center;
+  padding: 0 10px;
+  font-family: var(--font-px);
+  font-size: 18px;
+  color: var(--ink-dim);
+  background: var(--panel-2);
+  box-shadow: 0 0 0 2px var(--line);
+  margin: 2px 0 2px 2px;
+}
+.handle-input input {
+  flex: 1;
+  min-width: 0;
+}
+.handle-status {
+  min-height: 1.4em;
+}
+.handle-ok {
+  color: var(--accent);
+  font-weight: 700;
+}
+.handle-bad {
+  color: var(--danger);
+  font-weight: 700;
+}

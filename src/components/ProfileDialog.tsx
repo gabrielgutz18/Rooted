@@ -22,7 +22,7 @@ export default function ProfileDialog({
   points: number;
   notes: number;
   streak: number;
-  onUsername(username: string): void;
+  onUsername(username: string, displayName?: string): void;
   onChangeTree(): void;
   onClose(): void;
 }) {
@@ -31,6 +31,7 @@ export default function ProfileDialog({
   const close = useRef(onClose);
   close.current = onClose;
   const [email, setEmail] = useState<string | null>(null);
+  const [changing, setChanging] = useState(false);
   const dateFmt = useMemo(() => new Intl.DateTimeFormat(t.locale, { month: 'long', day: 'numeric', year: 'numeric' }), [t.locale]);
 
   useEffect(() => {
@@ -47,6 +48,7 @@ export default function ProfileDialog({
   // null: an older email account with no username yet (undefined: the usernames update isn't
   // on the server, so don't offer it). The admin always signs in with the email.
   const canAddName = me.username === null && !me.is_admin;
+  const canChangeName = !!me.username && !me.is_admin;
   const tree = t.species[speciesOf(me.tree).id].name;
 
   return (
@@ -88,7 +90,14 @@ export default function ProfileDialog({
           {me.username !== undefined && (
             <div>
               <dt>{t.username}</dt>
-              <dd>{me.username ?? <span className="muted">{t.noUsernameYet}</span>}</dd>
+              <dd className="profile-tree">
+                {me.username ? `@${me.username}` : <span className="muted">{t.noUsernameYet}</span>}
+                {canChangeName && !changing && (
+                  <button className="btn btn-small" onClick={() => setChanging(true)} aria-label={t.changeUsernameTitle}>
+                    {t.changeTree}
+                  </button>
+                )}
+              </dd>
             </div>
           )}
           <div>
@@ -111,6 +120,25 @@ export default function ProfileDialog({
         </dl>
 
         {me.is_admin && <p className="muted small">{t.adminKeepsEmail}</p>}
+
+        {canChangeName && changing && (
+          <section className="profile-add" aria-labelledby="change-username-title">
+            <h3 id="change-username-title" className="side-title">
+              {t.changeUsernameTitle}
+            </h3>
+            <p className="muted">{t.changeUsernameIntro}</p>
+            <UsernameForm
+              mode="change"
+              current={me.username}
+              autoFocus
+              onCancel={() => setChanging(false)}
+              onDone={(username, displayName) => {
+                setChanging(false);
+                onUsername(username, displayName);
+              }}
+            />
+          </section>
+        )}
 
         {canAddName && (
           <section className="profile-add" aria-labelledby="add-username-title">

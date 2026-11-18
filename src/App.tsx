@@ -242,9 +242,11 @@ function Garden({ userId }: { userId: string }) {
   // the usernames migration isn't run, so don't ask). The admin keeps the email.
   const needsName = !!me && !me.is_admin && me.username === null && !nameLater;
 
-  function namePicked(username: string) {
-    setMe((m) => (m ? { ...m, username } : m));
-    setPeople((list) => list.map((p) => (p.id === userId ? { ...p, username } : p)));
+  /** A username added (older email accounts) or changed; the display name may follow it. */
+  function namePicked(username: string, displayName?: string) {
+    const change = (p: Profile) => ({ ...p, username, display_name: displayName ?? p.display_name });
+    setMe((m) => (m ? change(m) : m));
+    setPeople((list) => list.map((p) => (p.id === userId ? change(p) : p)));
     setNotice(t.usernameSaved(username));
   }
   const closeProfile = useCallback(() => setProfileOpen(false), []);

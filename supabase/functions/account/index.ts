@@ -2,6 +2,7 @@
 // browser can't be trusted to do on its own.
 //
 //   choose-username  an older email account picks its username (signed in)
+//   change-username  a member swaps their username for another, like a handle (signed in)
 //   reset            forgot password: a new one, for whoever holds the recovery key (signed out)
 //   admin-reset      the admin gives a member a new random password (admin only)
 //
@@ -111,6 +112,39 @@ async function chooseUsername(req: Request, body: Record<string, unknown>) {
   return reply(200, { username: name });
 }
 
+/**
+ * Like changing a handle: the new username signs in from now on, the old one stops working
+ * at once and is free for anyone. Password, tree and notes stay. A display name that was
+ * just the old username follows the new one (as typed, so "Grace_G" keeps its capitals).
+ */
+async function changeUsername(req: Request, body: Record<string, unknown>) {
+  const user = await caller(req);
+  if (!user) return fail(401, 'Not signed in');
+  const typed = String(body.username ?? '').trim();
+  const name = usernameOf(typed);
+  if (!USERNAME.test(name)) return fail(400, BAD_USERNAME);
+
+  const { data: profile, error } = await admin.from('profiles').select('is_admin, username, display_name').eq('id', user.id).maybeSingle();
+  if (error) throw error;
+  if (!profile) return fail(400, 'Profile not found');
+  if (profile.is_admin) return fail(400, 'The admin keeps signing in with email.');
+  if (!profile.username) return fail(400, 'Pick a username first.');
+  if (profile.username === name) return fail(400, "That's already your username.");
+
+  // The database moves the username along with the stand-in email (usernames migration).
+  const { error: e2 } = await admin.auth.admin.updateUserById(user.id, { email: `${name}@${DOMAIN}`, email_confirm: true });
+  if (e2) {
+    if (e2.code === 'email_exists' || /already/i.test(e2.message)) return fail(409, 'That username is taken.');
+    throw e2;
+  }
+  let displayName = profile.display_name as string;
+  if (displayName.trim().toLowerCase() === profile.username) {
+    const { error: e3 } = await admin.from('profiles').update({ display_name: typed }).eq('id', user.id);
+    if (!e3) displayName = typed; // best effort: the username itself has already changed
+  }
+  return reply(200, { username: name, display_name: displayName });
+}
+
 async function reset(body: Record<string, unknown>) {
   const name = usernameOf(body.username);
   const check = typeof body.check === 'string' ? fromB64(body.check) : null;
@@ -177,6 +211,8 @@ Deno.serve(async (req) => {
     switch (body.action) {
       case 'choose-username':
         return await chooseUsername(req, body);
+      case 'change-username':
+        return await changeUsername(req, body);
       case 'reset':
         return await reset(body);
       case 'admin-reset':

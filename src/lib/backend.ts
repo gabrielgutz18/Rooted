@@ -71,6 +71,13 @@ export interface Backend {
   signOut(): Promise<void>;
   /** An older email account picks its username; from then on it signs in with that. */
   chooseUsername(username: string): Promise<void>;
+  /**
+   * Swap your username for another, like a handle: the new one signs in from now on and the
+   * old one is free for anyone. A display name that was just the old username follows it.
+   */
+  changeUsername(username: string): Promise<{ username: string; display_name: string }>;
+  /** Whether a (valid) username is free, someone else's, or already yours. */
+  usernameStatus(username: string): Promise<'available' | 'taken' | 'yours'>;
   /** The email this account signs in with, or null when it signs in with a username. Works offline. */
   signInEmail(): Promise<string | null>;
   /** Forgot password: the recovery key sets a new one, signs in and reopens the notes. */
@@ -346,6 +353,27 @@ function cloud(): Backend {
       // the session still carries the old email until it is refreshed
       await sb.auth.refreshSession();
     },
+    async changeUsername(username) {
+      if (!isValidUsername(username)) throw new Error(BAD_USERNAME);
+      let done: { username: string; display_name: string };
+      try {
+        done = await account({ action: 'change-username', username: username.trim() });
+      } catch (err) {
+        // the account function deployed on the server is older than this feature
+        if (messageOf(err) === 'Unknown action') throw new Error(NEEDS_ACCOUNT_SERVER);
+        throw err;
+      }
+      // the session still carries the old stand-in email until it is refreshed
+      await sb.auth.refreshSession();
+      return done;
+    },
+    async usernameStatus(username) {
+      const name = normalizeUsername(username);
+      const { data, error } = await sb.from('profiles').select('id').eq('username', name).maybeSingle();
+      if (error) throw error;
+      if (!data) return 'available';
+      return data.id === (await currentUser())?.id ? 'yours' : 'taken';
+    },
     async signInEmail() {
       const email = (await currentUser())?.email;
       return email && !email.endsWith(`@${USERNAME_DOMAIN}`) ? email : null;
@@ -587,6 +615,25 @@ function local(): Backend {
       if (db.users.some((u) => u.username === name && u.id !== user.id)) throw new Error(TAKEN);
       user.username = name;
       write(db);
+    },
+    async changeUsername(username) {
+      if (!isValidUsername(username)) throw new Error(BAD_USERNAME);
+      const db = read();
+      const name = normalizeUsername(username);
+      const user = db.users.find((u) => u.id === me(db));
+      if (!user) throw new Error('Not signed in');
+      if (!user.username) throw new Error('Pick a username first.');
+      if (user.username === name) throw new Error("That's already your username.");
+      if (db.users.some((u) => u.username === name)) throw new Error(TAKEN);
+      if (user.name.trim().toLowerCase() === user.username) user.name = username.trim();
+      user.username = name;
+      write(db);
+      return { username: name, display_name: user.name };
+    },
+    async usernameStatus(username) {
+      const db = read();
+      const owner = db.users.find((u) => u.username === normalizeUsername(username));
+      return !owner ? 'available' : owner.id === db.session ? 'yours' : 'taken';
     },
     async signInEmail() {
       const db = read();
