@@ -147,6 +147,14 @@ Supabase holds the database and accounts; the website itself needs a static host
 Run `npm run build` and deploy the `dist` folder to Vercel, Netlify or Cloudflare Pages,
 setting the same two `VITE_SUPABASE_…` variables there.
 
+**Sharing the link.** When the address is shared (Facebook, Messenger, WhatsApp, X…), the
+preview shows `public/og-image.png`: the landing page with a sakura at sunset, 1200 × 630
+(the tags are in `index.html`). Most apps need the picture's full address, which is filled in
+when the site is built: by itself on Vercel and Netlify, and anywhere else from a `SITE_URL`
+setting (e.g. `SITE_URL=https://rooted.example.com`). After changing the landing page's look,
+retake the picture with `SHOWCASE=1 npx playwright test -c playwright.showcase.config.ts share`.
+Facebook keeps a copy of a preview for a while; its Sharing Debugger fetches it again.
+
 ## Where things are
 
 | What | File |

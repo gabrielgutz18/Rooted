@@ -89,7 +89,7 @@ export default function App() {
   if (!userId) {
     if (page === 'developer') return <Developer />; // open to anyone, signed in or not
     const landing = !wasIn && !isStandalone();
-    if (landing && door === 'landing') return <Landing onStart={openDoor} />;
+    if (landing && door === 'landing') return <Landing onStart={openDoor} tree={treeParam} hour={hourParam} />;
     return <AuthScreen key={door} start={door === 'signin' ? 'signin' : 'signup'} onBack={landing ? backToLanding : undefined} />;
   }
   // Signed in, the garden stays open (just hidden) behind other pages, so coming back

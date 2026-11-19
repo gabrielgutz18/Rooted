@@ -31,8 +31,11 @@ function freeAreaFor(box: HTMLElement, card: HTMLElement, nav: HTMLElement): Fre
   return { left: 0, right: b.width, top: Math.max(below, r.bottom - b.top + gap) };
 }
 
-/** The first page a visitor sees: what Rooted is, and Try now / Install. */
-export default function Landing({ onStart }: { onStart(door: 'signup' | 'signin'): void }) {
+/**
+ * The first page a visitor sees: what Rooted is, and Try now / Install. `tree` and `hour` come
+ * from ?tree= and ?hour= (as in the app), so a picture of the page looks the same every time.
+ */
+export default function Landing({ onStart, tree, hour }: { onStart(door: 'signup' | 'signin'): void; tree?: string; hour?: number }) {
   const t = useT();
   const install = useInstall();
   const [installHelp, setInstallHelp] = useState(false);
@@ -64,8 +67,8 @@ export default function Landing({ onStart }: { onStart(door: 'signup' | 'signin'
   };
 
   useEffect(() => {
-    const species = SHOWN[Math.floor(Math.random() * SHOWN.length)];
-    const s = new Scene(canvasRef.current!, { points: STEPS[reduced ? STEPS.length - 1 : 0], seed: 'landing', species });
+    const species = tree ?? SHOWN[Math.floor(Math.random() * SHOWN.length)];
+    const s = new Scene(canvasRef.current!, { points: STEPS[reduced ? STEPS.length - 1 : 0], seed: 'landing', species, hour });
     // the page's colours follow the sky, as in the app
     s.onPeriod = (p) => (document.documentElement.dataset.period = p);
     scene.current = s;

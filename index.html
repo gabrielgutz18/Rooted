@@ -5,6 +5,22 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="theme-color" content="#120b18" />
     <meta name="description" content="A faith journal where a pixel tree grows with every note." />
+    <!-- the preview when the link is shared (Facebook, Messenger, WhatsApp, X…). The picture is
+         public/og-image.png, retaken by e2e/share.shots.ts. __SITE_URL__ becomes the site's own
+         address when it's built (vite.config.ts): most apps need the picture's full address. -->
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="Rooted" />
+    <meta property="og:title" content="Rooted — a tree that grows with your walk of faith" />
+    <meta
+      property="og:description"
+      content="A faith journal where a pixel tree grows with every note. Write about church, cell group, Bible study or prayer, in English or Tagalog."
+    />
+    <meta property="og:image" content="__SITE_URL__/og-image.png" />
+    <meta property="og:image:type" content="image/png" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:image:alt" content="Rooted: a pink pixel-art sakura tree at sunset, beside the words “A tree that grows with your walk of faith.”" />
+    <meta name="twitter:card" content="summary_large_image" />
     <!-- installable app: manifest + icons (regenerate icons with `npm run icons`) -->
     <link rel="manifest" href="/manifest.webmanifest" />
     <link rel="icon" type="image/png" sizes="32x32" href="/icons/favicon-32.png" />

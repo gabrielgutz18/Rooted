@@ -6,12 +6,14 @@ import { defineConfig, devices } from '@playwright/test';
 //   npx playwright test -c playwright.showcase.config.ts            the landing page tests
 //   SHOWCASE=1 npx playwright test -c playwright.showcase.config.ts  also retake the pictures in
 //                                                                   src/assets/landing/ (e2e/showcase.shots.ts)
+//                                                                   and the link-share picture,
+//                                                                   public/og-image.png (e2e/share.shots.ts)
 //   (PowerShell: $env:SHOWCASE=1; npx playwright test -c playwright.showcase.config.ts)
 const PORT = 5198;
 
 export default defineConfig({
   testDir: 'e2e',
-  testMatch: ['landing.spec.ts', 'landing-showcase.spec.ts', 'showcase.shots.ts'],
+  testMatch: ['landing.spec.ts', 'landing-showcase.spec.ts', 'showcase.shots.ts', 'share.shots.ts'],
   outputDir: 'test-results/showcase',
   fullyParallel: true,
   reporter: [['list']],

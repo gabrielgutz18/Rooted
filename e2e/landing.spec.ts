@@ -109,6 +109,22 @@ test('the bar fits on one line just above the menu width, in English and Tagalog
   await expect(page.getByRole('button', { name: /Menu/ })).toBeVisible();
 });
 
+test('a shared link shows a picture: the share tags, and the 1200 × 630 picture they name', async ({ page, request }) => {
+  await page.goto('/');
+  const og = (property: string) => page.locator(`meta[property="${property}"]`);
+  await expect(og('og:title')).toHaveAttribute('content', /^Rooted/);
+  await expect(og('og:description')).toHaveAttribute('content', /pixel tree/);
+  await expect(og('og:image')).toHaveAttribute('content', /\/og-image\.png$/);
+  await expect(page.locator('meta[name="twitter:card"]')).toHaveAttribute('content', 'summary_large_image');
+
+  // (here, with no site address set, it's relative; built on the host it's the full address)
+  const res = await request.get((await og('og:image').getAttribute('content'))!);
+  expect(res.status()).toBe(200);
+  expect(res.headers()['content-type']).toContain('image/png');
+  const png = await res.body();
+  expect([png.readUInt32BE(16), png.readUInt32BE(20)], 'width and height, from the PNG header').toEqual([1200, 630]);
+});
+
 test('signing up from the landing page opens the tree, and signing out shows the form', async ({ page }) => {
   await page.goto('/');
   await card(page).getByRole('button', { name: 'Try now' }).click();
