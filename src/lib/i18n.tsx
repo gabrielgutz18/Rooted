@@ -214,6 +214,42 @@ const en = {
   /** Under each tree in the picker: where it comes from (its land is drawn behind it). */
   nativeTo: (land: string) => `Native to ${land}`,
 
+  // the landing page (src/pages/landing.tsx): the first page for someone not signed in
+  landingLead: 'Write a few lines about church, cell group, Bible study or prayer, and a pixel tree grows from your words.',
+  tryNow: 'Try now',
+  installShort: 'Install',
+  landingInstalled: 'Installed — open Rooted from your home screen or desktop.',
+  haveTree: 'Already planted a tree?',
+  howItWorks: 'How it works',
+  landingStage: (stage: string) => `Growing · ${stage}`,
+  landingSteps: [
+    {
+      title: 'Write today’s note',
+      body: 'Like a diary: what happened, what you learned, verses you read, who you prayed for. In English or Tagalog.',
+    },
+    {
+      title: 'Your tree grows',
+      body: 'The tree reads your words, and Scripture and faith grow it most. Butterflies, birds, deer and even monkeys move in as it grows.',
+    },
+    {
+      title: 'Keep the lamp lit',
+      body: 'Write each day and your streak lamp burns brighter. Leave it a while and the leaves fall — one note brings them back.',
+    },
+  ],
+  landingWhy: 'Made for your walk of faith',
+  landingFeatures: (trees: number) => [
+    {
+      title: 'Only you can read your notes',
+      body: 'Notes are locked before they leave your device — not even the admin can read them. Friends see your tree, never your words.',
+    },
+    { title: 'Visit friends’ trees', body: 'Open a friend’s tree from the menu to see how they’re growing, their progress squares and their lamp.' },
+    { title: `${trees} trees to choose from`, body: 'Oak, sakura, baobab, jacaranda and more, each standing in the land it comes from.' },
+    { title: 'Works offline', body: 'Install it on your phone or computer. Notes written without signal upload when you’re back online.' },
+  ],
+  landingCta: 'Plant your tree',
+  landingCtaBody: 'All it takes is a username and password — no email needed.',
+  aboutRooted: 'About Rooted',
+
   // signing in
   tagline: 'A tree that grows with your walk of faith.',
   createAccount: 'Create account',
@@ -597,6 +633,48 @@ const tl: Strings = {
     monkeypuzzle: { name: 'Monkey Puzzle', blurb: 'Matinik na sangang parang lubid mula pa sa panahon ng mga dinosaur.', land: 'Chile' },
   },
   nativeTo: (land) => `Katutubo sa ${land}`,
+
+  landingLead:
+    'Magsulat ng ilang linya tungkol sa simbahan, cell group, pag-aaral ng Biblia o panalangin, at lalago ang isang pixel na puno mula sa iyong mga salita.',
+  tryNow: 'Subukan ngayon',
+  installShort: 'I-install',
+  landingInstalled: 'Na-install na — buksan ang Rooted mula sa iyong home screen o desktop.',
+  haveTree: 'May puno ka na?',
+  howItWorks: 'Paano ito gumagana',
+  landingStage: (stage) => `Lumalago · ${stage}`,
+  landingSteps: [
+    {
+      title: 'Isulat ang tala ngayong araw',
+      body: 'Parang diary: ang nangyari, ang natutunan mo, ang mga talatang binasa mo, ang mga ipinanalangin mo. Sa English o Tagalog.',
+    },
+    {
+      title: 'Lalago ang iyong puno',
+      body: 'Binabasa ng puno ang iyong mga salita, at pinakapinalalago ito ng Kasulatan at pananampalataya. Darating ang mga paru-paro, ibon, usa at pati mga unggoy habang lumalaki ito.',
+    },
+    {
+      title: 'Panatilihing may sindi ang lampara',
+      body: 'Magsulat araw-araw at lalong liliwanag ang iyong streak lamp. Kapag matagal mong iniwan, malalagas ang mga dahon — isang tala lang at babalik ang mga ito.',
+    },
+  ],
+  landingWhy: 'Ginawa para sa iyong paglakad sa pananampalataya',
+  landingFeatures: (trees) => [
+    {
+      title: 'Ikaw lang ang makababasa ng iyong mga tala',
+      body: 'Naka-lock ang mga tala bago pa umalis sa iyong device — kahit ang admin ay hindi makababasa nito. Nakikita ng mga kaibigan ang iyong puno, hindi ang iyong mga salita.',
+    },
+    {
+      title: 'Bisitahin ang puno ng mga kaibigan',
+      body: 'Buksan ang puno ng isang kaibigan mula sa menu para makita ang kanilang paglago, mga parisukat ng progreso at lampara.',
+    },
+    { title: `${trees} punong mapagpipilian`, body: 'Oak, sakura, baobab, jacaranda at iba pa, bawat isa nakatayo sa lupaing pinagmulan nito.' },
+    {
+      title: 'Gumagana kahit offline',
+      body: 'I-install ito sa iyong phone o computer. Ang mga talang isinulat nang walang signal ay maa-upload pagbalik mo online.',
+    },
+  ],
+  landingCta: 'Itanim ang iyong puno',
+  landingCtaBody: 'Username at password lang ang kailangan — walang email.',
+  aboutRooted: 'Tungkol sa Rooted',
 
   tagline: 'Isang punong lumalago kasabay ng iyong paglakad sa pananampalataya.',
   createAccount: 'Gumawa ng account',

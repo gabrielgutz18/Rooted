@@ -7,9 +7,9 @@ import LangSwitch from './LangSwitch';
 type Mode = 'signup' | 'signin' | 'reset';
 
 /** One short form: username and password, and you are in. (The admin signs in with email.) */
-export default function AuthScreen() {
+export default function AuthScreen({ start = 'signup', onBack }: { start?: 'signup' | 'signin'; onBack?: () => void }) {
   const t = useT();
-  const [mode, setMode] = useState<Mode>('signup');
+  const [mode, setMode] = useState<Mode>(start);
   const [login, setLogin] = useState('');
   const [password, setPassword] = useState('');
   const [recoveryKey, setRecoveryKey] = useState('');
@@ -151,6 +151,11 @@ export default function AuthScreen() {
           </>
         )}
         {local && <p className="muted small">{t.localTrial}</p>}
+        {onBack && mode !== 'reset' && (
+          <button type="button" className="link auth-link" onClick={onBack}>
+            ← {t.aboutRooted}
+          </button>
+        )}
       </form>
     </div>
   );

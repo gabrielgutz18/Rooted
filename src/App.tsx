@@ -18,7 +18,8 @@ import UsernameDialog from './components/UsernameDialog';
 import ProfilePanel from './components/ProfilePanel';
 import { Avatar } from './components/Avatar';
 import { speciesOf } from './scene/species';
-import { useInstall } from './lib/install';
+import { isStandalone, useInstall } from './lib/install';
+import Landing from './pages/landing';
 import { clearSnapshots, readSnapshot, writeSnapshot } from './lib/cache';
 import { addToOutbox, asEntry, clearOutbox, editInOutbox, isOffline, readOutbox, removeFromOutbox, withPending, withTimeout } from './lib/outbox';
 
@@ -34,17 +35,59 @@ const treeParam = new URLSearchParams(location.search).get('tree') ?? undefined;
 const message = (err: unknown) =>
   err && typeof err === 'object' && 'message' in err ? String((err as { message: unknown }).message) : 'Something went wrong.';
 
+// Someone who isn't signed in first sees the landing page. Try now / Sign in open the form at
+// #start / #signin, so the browser's Back returns to the landing page. The installed app, and
+// anyone who was signed in during this visit (then signed out), go straight to the form.
+type Door = 'landing' | 'signup' | 'signin';
+const doorFromHash = (): Door => (location.hash === '#signin' ? 'signin' : location.hash === '#start' ? 'signup' : 'landing');
+const plainUrl = () => location.pathname + location.search;
+
 export default function App() {
   const t = useT();
   const [userId, setUserId] = useState<string | null | undefined>(undefined);
+  const [door, setDoor] = useState<Door>(doorFromHash);
+  const [wasIn, setWasIn] = useState(false);
 
   useEffect(() => {
     backend.getUserId().then(setUserId);
     return backend.onAuth(setUserId);
   }, []);
 
+  useEffect(() => {
+    const follow = () => setDoor(doorFromHash());
+    window.addEventListener('popstate', follow);
+    window.addEventListener('hashchange', follow);
+    return () => {
+      window.removeEventListener('popstate', follow);
+      window.removeEventListener('hashchange', follow);
+    };
+  }, []);
+
+  // signed in: drop #start / #signin from the address
+  useEffect(() => {
+    if (!userId) return;
+    setWasIn(true);
+    if (location.hash) history.replaceState(null, '', plainUrl());
+  }, [userId]);
+
+  const openDoor = useCallback((next: 'signup' | 'signin') => {
+    history.pushState({ door: next }, '', next === 'signin' ? '#signin' : '#start');
+    setDoor(next);
+    window.scrollTo({ top: 0 });
+  }, []);
+
+  const backToLanding = useCallback(() => {
+    if (history.state?.door) return history.back(); // came from the landing page
+    history.replaceState(null, '', plainUrl());
+    setDoor('landing');
+  }, []);
+
   if (userId === undefined) return <div className="splash">{t.planting}</div>;
-  if (!userId) return <AuthScreen />;
+  if (!userId) {
+    const landing = !wasIn && !isStandalone();
+    if (landing && door === 'landing') return <Landing onStart={openDoor} />;
+    return <AuthScreen key={door} start={door === 'signin' ? 'signin' : 'signup'} onBack={landing ? backToLanding : undefined} />;
+  }
   return <Garden key={userId} userId={userId} />;
 }
 
