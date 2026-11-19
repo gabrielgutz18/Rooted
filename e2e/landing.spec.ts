@@ -76,6 +76,9 @@ test('the navigation bar: links scroll to their part of the page, and open sign-
 
   await nav(page).getByRole('button', { name: 'How it works' }).click();
   await expect(page.getByRole('heading', { name: 'How it works' })).toBeInViewport();
+  // the screenshots section (src/pages/landing-showcase.tsx)
+  await nav(page).getByRole('button', { name: 'Screenshots' }).click();
+  await expect(page.locator('#see-it')).toBeInViewport();
   await page.getByRole('button', { name: 'Rooted — back to top' }).click();
   await expect(card(page)).toBeInViewport();
 

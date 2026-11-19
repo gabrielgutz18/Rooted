@@ -7,6 +7,7 @@ import { useT } from '../lib/i18n';
 import { navigate } from '../lib/route';
 import LangSwitch from '../components/LangSwitch';
 import InstallDialog from '../components/InstallDialog';
+import LandingShowcase from './landing-showcase';
 
 // The tree on the landing page grows a stage at a time, the way notes grow yours.
 const STEPS = [60, 250, 700, 1800, 4000];
@@ -124,6 +125,10 @@ export default function Landing({ onStart }: { onStart(door: 'signup' | 'signin'
             <span aria-hidden="true">Rooted</span>
           </button>
           <nav id="landing-links" className={`landing-links ${menuOpen ? 'is-open' : ''}`} aria-label={t.mainNav}>
+            {/* the screenshots section (src/pages/landing-showcase.tsx) */}
+            <button type="button" className="landing-link" onClick={pick(() => document.getElementById('see-it')?.scrollIntoView({ behavior }))}>
+              {t.screenshotsNav}
+            </button>
             <button type="button" className="landing-link" onClick={pick(() => howRef.current?.scrollIntoView({ behavior }))}>
               {t.howItWorks}
             </button>
@@ -184,6 +189,7 @@ export default function Landing({ onStart }: { onStart(door: 'signup' | 'signin'
       </section>
 
       <div className="landing-body">
+        <LandingShowcase />
         <section ref={howRef} className="landing-section" aria-labelledby="how-title">
           <h2 id="how-title" className="landing-h2">
             {t.howItWorks}
