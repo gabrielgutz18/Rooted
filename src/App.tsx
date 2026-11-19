@@ -100,7 +100,7 @@ function Garden({ userId }: { userId: string }) {
 
   /** Upload notes written offline, oldest first. Safe to call often. */
   const syncNow = useCallback(async () => {
-    if (!cloud || syncing.current || locked.current) return;
+    if (!cloud || syncing.current || locked.current || navigator.onLine === false) return;
     const waiting = readOutbox(userId);
     if (!waiting.length) return;
     syncing.current = true;
@@ -303,12 +303,17 @@ function Garden({ userId }: { userId: string }) {
     const before = stageFor(points).index;
     const streakBefore = myStreak;
     const id = crypto.randomUUID();
-    let created: Entry;
-    try {
-      created = await withTimeout(backend.addEntry(input, { id }), 12000);
-    } catch (err) {
+    let created: Entry | null = null;
+    // known offline: keep it straight away instead of waiting for the request to fail
+    if (!(cloud && navigator.onLine === false)) {
+      try {
+        created = await withTimeout(backend.addEntry(input, { id }), 12000);
+      } catch (err) {
+        if (!cloud || !isOffline(err)) throw err;
+      }
+    }
+    if (!created) {
       // no connection: keep it on this device (same id, so a late upload isn't doubled)
-      if (!cloud || !isOffline(err)) throw err;
       created = asEntry(addToOutbox(userId, input, id));
       setNotice(t.offlineKept);
     }
