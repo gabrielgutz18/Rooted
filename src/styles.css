@@ -1273,13 +1273,149 @@ p {
 }
 
 /* ---------- landing page: the first page for someone not signed in ---------- */
+/* the navigation bar floats over the top of the page as a pixel panel */
+.landing-nav {
+  position: fixed;
+  top: 10px;
+  left: 0;
+  right: 0;
+  z-index: 20;
+  padding-inline: clamp(10px, 3vw, 40px);
+  pointer-events: none; /* only the bar itself takes clicks */
+}
+.landing-bar {
+  pointer-events: auto;
+  position: relative;
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 8px 12px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.landing-brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 2px 4px;
+  border: 0;
+  background: none;
+  cursor: pointer;
+  font-family: var(--font-px);
+  font-weight: 700;
+  font-size: 22px;
+  color: var(--ink);
+}
+.landing-brand img {
+  image-rendering: pixelated;
+  box-shadow: 0 0 0 2px var(--line);
+}
+.landing-links {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.landing-link {
+  font-family: var(--font-px);
+  font-weight: 600;
+  font-size: 15px;
+  padding: 6px 10px;
+  border: 0;
+  background: none;
+  color: var(--ink);
+  cursor: pointer;
+  white-space: nowrap;
+}
+.landing-link:hover {
+  background: var(--panel-2);
+  box-shadow: inset 0 -3px 0 0 var(--accent);
+}
+.landing-link-signin {
+  color: var(--accent);
+}
+.landing-bar .landing-lang .lang-label {
+  display: none; /* "English" and "Tagalog" say it on their own */
+}
+.landing-menu-btn,
+.landing-scrim {
+  display: none;
+}
+.landing-scrim {
+  position: fixed;
+  inset: 0;
+  z-index: 19;
+}
+/* not enough room for the links: they fold into the menu under the bar
+   (the Tagalog labels are the longest: about 1150px for the whole bar) */
+@media (max-width: 1260px) {
+  .landing-menu-btn {
+    display: inline-block;
+  }
+  .landing-scrim {
+    display: block;
+  }
+  .landing-lang {
+    margin-left: auto;
+  }
+  .landing-links {
+    display: none;
+    position: absolute;
+    top: calc(100% + 12px);
+    right: 0;
+    width: min(280px, 100%);
+    flex-direction: column;
+    align-items: stretch;
+    gap: 2px;
+    padding: 8px;
+    background: var(--panel);
+    box-shadow:
+      0 -3px 0 0 var(--line),
+      0 3px 0 0 var(--line),
+      -3px 0 0 0 var(--line),
+      3px 0 0 0 var(--line),
+      0 9px 0 0 var(--shadow);
+  }
+  .landing-links.is-open {
+    display: flex;
+  }
+  .landing-link {
+    text-align: left;
+    padding: 10px 12px;
+  }
+}
+@media (max-width: 720px) {
+  .landing-nav-try {
+    display: none; /* Try now is right below, on the card */
+  }
+  .landing-bar {
+    gap: 6px;
+    padding: 6px 8px;
+  }
+  .landing-brand {
+    font-size: 19px;
+  }
+  .landing-bar .lang-btn {
+    font-size: 12px;
+    padding: 3px 7px;
+  }
+}
+@media (max-width: 360px) {
+  .landing-brand span {
+    display: none; /* the tree icon alone */
+  }
+}
+.landing-section {
+  scroll-margin-top: 84px; /* clear of the bar when a link scrolls here */
+}
+
 .landing-hero {
   position: relative;
   min-height: 100vh;
   min-height: 100svh;
   display: grid;
   align-content: center;
-  padding: 32px clamp(16px, 6vw, 72px);
+  padding: 88px clamp(16px, 6vw, 72px) 32px;
   overflow: hidden;
 }
 .landing-scene {
@@ -1293,9 +1429,6 @@ p {
   position: relative;
   width: min(440px, 100%);
   padding: 24px;
-}
-.landing-lang {
-  justify-self: start;
 }
 .landing-title {
   font-size: clamp(40px, 8vw, 60px);
@@ -1397,7 +1530,7 @@ p {
 @media (max-width: 720px) {
   .landing-hero {
     align-content: start;
-    padding: 16px;
+    padding: 70px 16px 16px;
   }
   .landing-card {
     width: 100%;

@@ -16,13 +16,17 @@ const SHOWN = ['sakura', 'jacaranda', 'poinciana', 'maple', 'oak'];
 
 const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
 
-/** Where the tree can stand clear of the card: beside it on a wide screen, under it on a phone. */
-function freeAreaFor(box: HTMLElement, card: HTMLElement): FreeArea {
+/**
+ * Where the tree can stand clear of the card and the navigation bar: beside the card on a wide
+ * screen, under it on a phone. (The bar is fixed at the top of the window, over the hero.)
+ */
+function freeAreaFor(box: HTMLElement, card: HTMLElement, nav: HTMLElement): FreeArea {
   const b = box.getBoundingClientRect();
   const r = card.getBoundingClientRect();
   const gap = 12;
-  if ((r.left + r.right) / 2 - b.left < b.width * 0.4) return { left: r.right - b.left + gap, right: b.width, top: 0 };
-  return { left: 0, right: b.width, top: r.bottom - b.top + gap };
+  const below = nav.getBoundingClientRect().bottom + gap;
+  if ((r.left + r.right) / 2 - b.left < b.width * 0.4) return { left: r.right - b.left + gap, right: b.width, top: below };
+  return { left: 0, right: b.width, top: Math.max(below, r.bottom - b.top + gap) };
 }
 
 /** The first page a visitor sees: what Rooted is, and Try now / Install. */
@@ -35,7 +39,25 @@ export default function Landing({ onStart }: { onStart(door: 'signup' | 'signin'
   const cardRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const scene = useRef<Scene | null>(null);
+  const navRef = useRef<HTMLElement>(null);
   const howRef = useRef<HTMLElement>(null);
+  const whyRef = useRef<HTMLElement>(null);
+  // on a phone the links fold into a menu under the bar
+  const [menuOpen, setMenuOpen] = useState(false);
+
+  useEffect(() => {
+    if (!menuOpen) return;
+    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && setMenuOpen(false);
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [menuOpen]);
+
+  const behavior: ScrollBehavior = reduced ? 'auto' : 'smooth';
+  /** Close the menu, then do what the link says. */
+  const pick = (then: () => void) => () => {
+    setMenuOpen(false);
+    then();
+  };
 
   useEffect(() => {
     const species = SHOWN[Math.floor(Math.random() * SHOWN.length)];
@@ -45,12 +67,14 @@ export default function Landing({ onStart }: { onStart(door: 'signup' | 'signin'
     scene.current = s;
     const hero = heroRef.current!;
     const card = cardRef.current!;
+    const nav = navRef.current!;
     const ro = new ResizeObserver(() => {
       s.resize(hero.clientWidth, hero.clientHeight);
-      s.setFreeArea(freeAreaFor(hero, card));
+      s.setFreeArea(freeAreaFor(hero, card, nav));
     });
     ro.observe(hero);
     ro.observe(card);
+    ro.observe(nav);
     return () => {
       ro.disconnect();
       s.destroy();
@@ -93,10 +117,46 @@ export default function Landing({ onStart }: { onStart(door: 'signup' | 'signin'
 
   return (
     <div className="landing">
+      <header ref={navRef} className="landing-nav">
+        <div className="px-panel landing-bar">
+          <button type="button" className="landing-brand" aria-label={t.backToTop} onClick={pick(() => window.scrollTo({ top: 0, behavior }))}>
+            <img src="/icons/icon-192.png" alt="" width={30} height={30} />
+            <span aria-hidden="true">Rooted</span>
+          </button>
+          <nav id="landing-links" className={`landing-links ${menuOpen ? 'is-open' : ''}`} aria-label={t.mainNav}>
+            <button type="button" className="landing-link" onClick={pick(() => howRef.current?.scrollIntoView({ behavior }))}>
+              {t.howItWorks}
+            </button>
+            <button type="button" className="landing-link" onClick={pick(() => whyRef.current?.scrollIntoView({ behavior }))}>
+              {t.whyRooted}
+            </button>
+            <button type="button" className="landing-link" onClick={pick(() => navigate('developer'))}>
+              {t.developerMenu}
+            </button>
+            <button type="button" className="landing-link landing-link-signin" onClick={pick(() => onStart('signin'))}>
+              {t.signIn}
+            </button>
+          </nav>
+          <LangSwitch className="landing-lang" />
+          <button type="button" className="btn btn-primary btn-small landing-nav-try" onClick={() => onStart('signup')}>
+            {t.tryNow}
+          </button>
+          <button
+            type="button"
+            className="btn btn-small landing-menu-btn"
+            aria-expanded={menuOpen}
+            aria-controls="landing-links"
+            onClick={() => setMenuOpen((open) => !open)}
+          >
+            {t.menu}
+          </button>
+        </div>
+      </header>
+      {menuOpen && <div className="landing-scrim" onClick={() => setMenuOpen(false)} />}
+
       <section ref={heroRef} className="landing-hero" aria-labelledby="landing-title">
         <canvas ref={canvasRef} className="landing-scene" aria-hidden="true" />
         <div ref={cardRef} className="px-panel landing-card">
-          <LangSwitch className="landing-lang" />
           <h1 id="landing-title" className="brand-title landing-title">
             Rooted
           </h1>
@@ -113,7 +173,7 @@ export default function Landing({ onStart }: { onStart(door: 'signup' | 'signin'
               {' '}
               ·{' '}
             </span>
-            <button type="button" className="link" onClick={() => howRef.current?.scrollIntoView({ behavior: reduced ? 'auto' : 'smooth' })}>
+            <button type="button" className="link" onClick={() => howRef.current?.scrollIntoView({ behavior })}>
               {t.howItWorks} ↓
             </button>
           </p>
@@ -141,7 +201,7 @@ export default function Landing({ onStart }: { onStart(door: 'signup' | 'signin'
           </ol>
         </section>
 
-        <section className="landing-section" aria-labelledby="why-title">
+        <section ref={whyRef} className="landing-section" aria-labelledby="why-title">
           <h2 id="why-title" className="landing-h2">
             {t.landingWhy}
           </h2>

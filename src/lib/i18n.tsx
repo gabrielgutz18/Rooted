@@ -267,6 +267,8 @@ const en = {
   landingCta: 'Plant your tree',
   landingCtaBody: 'All it takes is a username and password — no email needed.',
   aboutRooted: 'About Rooted',
+  whyRooted: 'Why Rooted',
+  backToTop: 'Rooted — back to top',
 
   // signing in
   tagline: 'A tree that grows with your walk of faith.',
@@ -709,6 +711,8 @@ const tl: Strings = {
   landingCta: 'Itanim ang iyong puno',
   landingCtaBody: 'Username at password lang ang kailangan — walang email.',
   aboutRooted: 'Tungkol sa Rooted',
+  whyRooted: 'Bakit Rooted',
+  backToTop: 'Rooted — bumalik sa itaas',
 
   tagline: 'Isang punong lumalago kasabay ng iyong paglakad sa pananampalataya.',
   createAccount: 'Gumawa ng account',
