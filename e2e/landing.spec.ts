@@ -44,6 +44,12 @@ test('a visitor sees the landing page; Try now opens sign-up and Back returns', 
   await expect(page.getByRole('button', { name: 'Try now' }).first()).toBeVisible();
   await expect(page).not.toHaveURL(/#/);
 
+  // the footer opens the developer page, and Back comes home to the landing page
+  await page.getByRole('button', { name: 'About the developer' }).click();
+  await expect(page).toHaveURL(/\/developer$/);
+  await expect(page.getByRole('button', { name: 'Try now' })).toHaveCount(0);
+  await page.goBack();
+  await expect(page.getByRole('button', { name: 'Try now' }).first()).toBeVisible();
 });
 
 test('signing up from the landing page opens the tree, and signing out shows the form', async ({ page }) => {

@@ -35,6 +35,7 @@ const en = {
   chooseTree: 'Choose tree',
   installApp: 'Install app',
   updatesMenu: 'Updates',
+  developerMenu: 'About the developer',
   adminUsers: 'Admin · users',
   friends: 'Friends',
   noFriends: 'No one else has planted a tree yet. Invite a friend to sign up.',
@@ -204,6 +205,23 @@ const en = {
   updatesNew: 'New',
   updatesSignoff: 'Thank you for writing, and for growing with us.',
   updatesRollUp: 'Roll up the scroll',
+
+  // Menu → About the developer (src/pages/developer.tsx, at /developer)
+  dev: {
+    pageTitle: 'About the developer · Rooted',
+    kicker: 'About the developer',
+    title: 'Hi, I’m Gabriel',
+    body: [
+      'The idea came when I joined SUYNL. I haven’t really started my Bible journey yet, but I’ve read some verses, and I wanted a simple place to write down what stood out to me.',
+      'That’s Rooted: write a note, and a little tree grows with you.',
+    ],
+    signature: '— Gabriel',
+    iconAlt: 'Gabriel’s icon',
+    portfolio: 'View my portfolio',
+    madeWith: 'Made with',
+    back: 'Back to Rooted',
+  },
+
   pickFirstBlurb: 'Every note you write helps it grow. You can switch any time.',
   pickBlurb: 'Your growth stays the same — only the kind of tree changes.',
   growing: 'growing',
@@ -421,6 +439,7 @@ const tl: Strings = {
   chooseTree: 'Pumili ng puno',
   installApp: 'I-install ang app',
   updatesMenu: 'Mga update',
+  developerMenu: 'Tungkol sa developer',
   adminUsers: 'Admin · mga user',
   friends: 'Mga kaibigan',
   noFriends: 'Wala pang ibang nagtanim ng puno. Imbitahan ang isang kaibigan na mag-sign up.',
@@ -608,6 +627,21 @@ const tl: Strings = {
   updatesNew: 'Bago',
   updatesSignoff: 'Salamat sa pagsusulat, at sa paglago kasama namin.',
   updatesRollUp: 'Irolyo ang balumbon',
+
+  dev: {
+    pageTitle: 'Tungkol sa developer · Rooted',
+    kicker: 'Tungkol sa developer',
+    title: 'Hi, ako si Gabriel',
+    body: [
+      'Naisip ko ito noong sumali ako sa SUYNL. Hindi pa talaga nagsisimula ang paglalakbay ko sa Biblia, pero nakabasa na ako ng ilang talata, at gusto ko ng simpleng lugar para isulat ang mga tumatak sa akin.',
+      'Iyan ang Rooted: sumulat ng tala, at may maliit na punong lalago kasama mo.',
+    ],
+    signature: '— Gabriel',
+    iconAlt: 'Icon ni Gabriel',
+    portfolio: 'Tingnan ang aking portfolio',
+    madeWith: 'Ginawa gamit ang',
+    back: 'Bumalik sa Rooted',
+  },
   pickFirstBlurb: 'Bawat talang isusulat mo ay tumutulong sa paglago nito. Puwede kang magpalit kahit kailan.',
   pickBlurb: 'Hindi magbabago ang iyong paglago — ang uri lang ng puno ang mapapalitan.',
   growing: 'pinalalago',

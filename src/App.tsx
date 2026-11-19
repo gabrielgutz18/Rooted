@@ -20,6 +20,8 @@ import { Avatar } from './components/Avatar';
 import { speciesOf } from './scene/species';
 import { isStandalone, useInstall } from './lib/install';
 import Landing from './pages/landing';
+import Developer from './pages/developer';
+import { navigate, usePage } from './lib/route';
 import { clearSnapshots, readSnapshot, writeSnapshot } from './lib/cache';
 import { addToOutbox, asEntry, clearOutbox, editInOutbox, isOffline, readOutbox, removeFromOutbox, withPending, withTimeout } from './lib/outbox';
 
@@ -44,6 +46,7 @@ const plainUrl = () => location.pathname + location.search;
 
 export default function App() {
   const t = useT();
+  const page = usePage();
   const [userId, setUserId] = useState<string | null | undefined>(undefined);
   const [door, setDoor] = useState<Door>(doorFromHash);
   const [wasIn, setWasIn] = useState(false);
@@ -84,16 +87,24 @@ export default function App() {
 
   if (userId === undefined) return <div className="splash">{t.planting}</div>;
   if (!userId) {
+    if (page === 'developer') return <Developer />; // open to anyone, signed in or not
     const landing = !wasIn && !isStandalone();
     if (landing && door === 'landing') return <Landing onStart={openDoor} />;
     return <AuthScreen key={door} start={door === 'signin' ? 'signin' : 'signup'} onBack={landing ? backToLanding : undefined} />;
   }
-  return <Garden key={userId} userId={userId} />;
+  // Signed in, the garden stays open (just hidden) behind other pages, so coming back
+  // keeps the tree where it was and any note being written.
+  return (
+    <>
+      {page === 'developer' && <Developer />}
+      <Garden key={userId} userId={userId} hidden={page !== 'home'} />
+    </>
+  );
 }
 
 type View = { kind: 'home' } | { kind: 'visit'; profile: Profile } | { kind: 'admin' };
 
-function Garden({ userId }: { userId: string }) {
+function Garden({ userId, hidden }: { userId: string; hidden: boolean }) {
   const t = useT();
   // Start from the copy saved on this device last time, so the tree shows instantly.
   const [snap] = useState(() => (cloud ? readSnapshot(userId) : null));
@@ -425,7 +436,7 @@ function Garden({ userId }: { userId: string }) {
   const lastDay = visiting ? (visitDays ? lastDayOf(visitDays) : dayOf(visiting.last_entry_at)) : lastDayOf(myDays);
 
   return (
-    <div className="shell">
+    <div className="shell" hidden={hidden}>
       <button className="btn menu-btn" onClick={() => (menuOpen ? closeMenu() : setMenuOpen(true))} aria-expanded={menuOpen} aria-controls="side-menu">
         {t.menu}
         {updateUnseen && <span className="new-dot" aria-label={t.updatesNew} />}
@@ -522,6 +533,15 @@ function Garden({ userId }: { userId: string }) {
                   {t.adminUsers}
                 </button>
               )}
+              <button
+                className="side-link"
+                onClick={() => {
+                  closeMenu();
+                  navigate('developer');
+                }}
+              >
+                {t.developerMenu}
+              </button>
             </nav>
             <h2 className="side-title">{t.friends}</h2>
             <ul className="friend-list">

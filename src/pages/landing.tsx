@@ -4,6 +4,7 @@ import { SPECIES } from '../scene/species';
 import { stageFor } from '../lib/growth';
 import { useInstall } from '../lib/install';
 import { useT } from '../lib/i18n';
+import { navigate } from '../lib/route';
 import LangSwitch from '../components/LangSwitch';
 import InstallDialog from '../components/InstallDialog';
 
@@ -161,6 +162,13 @@ export default function Landing({ onStart }: { onStart(door: 'signup' | 'signin'
           <p className="muted">{t.landingCtaBody}</p>
           {actions}
         </section>
+
+        <footer className="landing-foot">
+          <span className="muted small">Rooted</span>
+          <button type="button" className="link" onClick={() => navigate('developer')}>
+            {t.developerMenu}
+          </button>
+        </footer>
       </div>
 
       {installHelp && <InstallDialog platform={install.platform} onClose={() => setInstallHelp(false)} />}
