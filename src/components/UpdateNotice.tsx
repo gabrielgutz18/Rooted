@@ -1,13 +1,16 @@
 // Menu → Updates: what's new, written as a letter on a scroll that unrolls.
+// The landing page opens it too, at the notice a visitor picked (src/pages/landing-updates.tsx).
 
-import { useEffect, useRef } from 'react';
+import { useEffect, useLayoutEffect, useRef } from 'react';
 import { useLang, useT } from '../lib/i18n';
 import { UPDATES, type UpdatePicture } from '../lib/updates';
 
-export default function UpdateNotice({ onClose }: { onClose(): void }) {
+/** `focus`: the id of an update to open the scroll at, instead of the top. */
+export default function UpdateNotice({ onClose, focus }: { onClose(): void; focus?: string }) {
   const t = useT();
   const lang = useLang();
   const box = useRef<HTMLDivElement>(null);
+  const paper = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     box.current?.focus();
@@ -15,6 +18,14 @@ export default function UpdateNotice({ onClose }: { onClose(): void }) {
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
   }, [onClose]);
+
+  // roll the paper on to that update before the first paint, so it unrolls already there
+  useLayoutEffect(() => {
+    const p = paper.current;
+    const article = focus && p?.querySelector<HTMLElement>(`[data-update="${CSS.escape(focus)}"]`);
+    if (!p || !article) return;
+    p.scrollTop += article.getBoundingClientRect().top - p.getBoundingClientRect().top - 12;
+  }, [focus]);
 
   const date = (d: string) => {
     const [y, m, day] = d.split('-').map(Number);
@@ -33,7 +44,7 @@ export default function UpdateNotice({ onClose }: { onClose(): void }) {
       <div ref={box} className="scroll" role="dialog" aria-modal="true" aria-labelledby="updates-title" tabIndex={-1}>
         <div className="scroll-rod" aria-hidden="true" />
         <div className="scroll-unroll">
-          <div className="scroll-paper">
+          <div ref={paper} className="scroll-paper">
             <header className="scroll-head">
               <button className="btn btn-small scroll-x" onClick={onClose}>
                 {t.close}
@@ -49,7 +60,7 @@ export default function UpdateNotice({ onClose }: { onClose(): void }) {
             </header>
 
             {UPDATES.map((u, k) => (
-              <article key={u.id} className="scroll-update" aria-labelledby={`upd-${u.id}`}>
+              <article key={u.id} className="scroll-update" aria-labelledby={`upd-${u.id}`} data-update={u.id}>
                 {k > 0 && (
                   <div className="scroll-rule" aria-hidden="true">
                     ❦

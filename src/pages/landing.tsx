@@ -8,6 +8,7 @@ import { navigate } from '../lib/route';
 import LangSwitch from '../components/LangSwitch';
 import InstallDialog from '../components/InstallDialog';
 import LandingShowcase from './landing-showcase';
+import LandingUpdates, { LatestUpdate, useUpdateScroll } from './landing-updates';
 
 // The tree on the landing page grows a stage at a time, the way notes grow yours.
 const STEPS = [60, 250, 700, 1800, 4000];
@@ -35,6 +36,8 @@ export default function Landing({ onStart }: { onStart(door: 'signup' | 'signin'
   const t = useT();
   const install = useInstall();
   const [installHelp, setInstallHelp] = useState(false);
+  // the update notices (src/pages/landing-updates.tsx) open the scroll from Menu → Updates
+  const updates = useUpdateScroll();
   const [step, setStep] = useState(reduced ? STEPS.length - 1 : 0);
   const heroRef = useRef<HTMLElement>(null);
   const cardRef = useRef<HTMLDivElement>(null);
@@ -162,6 +165,7 @@ export default function Landing({ onStart }: { onStart(door: 'signup' | 'signin'
       <section ref={heroRef} className="landing-hero" aria-labelledby="landing-title">
         <canvas ref={canvasRef} className="landing-scene" aria-hidden="true" />
         <div ref={cardRef} className="px-panel landing-card">
+          <LatestUpdate onOpen={updates.open} />
           <h1 id="landing-title" className="brand-title landing-title">
             Rooted
           </h1>
@@ -221,6 +225,8 @@ export default function Landing({ onStart }: { onStart(door: 'signup' | 'signin'
           </ul>
         </section>
 
+        <LandingUpdates onOpen={updates.open} />
+
         <section className="px-panel landing-cta" aria-labelledby="cta-title">
           <h2 id="cta-title" className="landing-h2">
             {t.landingCta}
@@ -231,6 +237,9 @@ export default function Landing({ onStart }: { onStart(door: 'signup' | 'signin'
 
         <footer className="landing-foot">
           <span className="muted small">Rooted</span>
+          <button type="button" className="link" onClick={() => updates.open()}>
+            {t.updatesMenu}
+          </button>
           <button type="button" className="link" onClick={() => navigate('developer')}>
             {t.developerMenu}
           </button>
@@ -238,6 +247,7 @@ export default function Landing({ onStart }: { onStart(door: 'signup' | 'signin'
       </div>
 
       {installHelp && <InstallDialog platform={install.platform} onClose={() => setInstallHelp(false)} />}
+      {updates.scroll}
     </div>
   );
 }

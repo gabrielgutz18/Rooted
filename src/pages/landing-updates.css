@@ -1,0 +1,259 @@
+/* ---------- landing page: update notices (src/pages/landing-updates.tsx) ---------- */
+
+.upd-sr {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+/* ----- on the hero card: the newest update ----- */
+
+.upd-pill {
+  justify-self: start;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  max-width: calc(100% - 4px);
+  margin: 2px;
+  padding: 3px 10px 3px 3px;
+  border: 0;
+  font-family: var(--font-px);
+  font-size: 13px;
+  font-weight: 600;
+  text-align: left;
+  color: var(--ink);
+  background: var(--panel-2);
+  box-shadow: 0 0 0 2px var(--line);
+  cursor: pointer;
+}
+.upd-pill:hover {
+  box-shadow:
+    0 0 0 2px var(--line),
+    inset 0 -3px 0 0 var(--accent);
+}
+.upd-pill-tag {
+  flex: none;
+  padding: 1px 6px;
+  font-size: 11px;
+  font-weight: 700;
+  color: #fff;
+  background: #9e2620; /* the wax seal's red, as on the scroll */
+}
+.upd-pill-title {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.upd-pill-go {
+  flex: none;
+  transition: transform 0.2s;
+}
+.upd-pill:hover .upd-pill-go {
+  transform: translateX(3px);
+}
+
+/* ----- further down: the latest few, on a piece of the scroll ----- */
+
+.upd {
+  scroll-margin-top: 84px; /* clear of the fixed navigation bar */
+}
+.upd-head {
+  display: grid;
+  gap: 6px;
+  max-width: 640px;
+}
+/* the same paper and rods as the scroll in Menu → Updates (.scroll-rod is in styles.css) */
+.upd-scroll {
+  --parch: #f3e4bf;
+  --parch-dark: #d8bb7e;
+  --parch-ink: #3b2716;
+  --parch-dim: #6e4e2c;
+  --wood: #6b3f1d;
+  --wood-hi: #a96b34;
+  --wood-lo: #3a2010;
+  margin: 6px 24px 8px; /* room for the knobs on the rods */
+  filter: drop-shadow(5px 7px 0 rgb(10 6 16 / 0.35));
+}
+.upd-paper {
+  margin: 0 10px;
+  padding: 22px clamp(16px, 4vw, 36px) 26px;
+  color: var(--parch-ink);
+  background-color: var(--parch);
+  background-image:
+    linear-gradient(rgb(110 70 20 / 0.28), transparent 22px, transparent calc(100% - 22px), rgb(110 70 20 / 0.28)),
+    radial-gradient(rgb(120 80 30 / 0.14) 1px, transparent 1.4px),
+    radial-gradient(ellipse at 50% 50%, transparent 60%, rgb(150 104 44 / 0.3) 100%);
+  background-size:
+    100% 100%,
+    7px 7px,
+    100% 100%;
+  box-shadow:
+    inset 3px 0 0 var(--parch-dark),
+    inset -3px 0 0 var(--parch-dark),
+    0 0 0 3px #1c1009;
+}
+.upd-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.upd-item {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  align-items: start;
+  gap: 14px 28px;
+  padding: 22px 0;
+}
+.upd-item:first-child {
+  padding-top: 6px;
+}
+.upd-item + .upd-item {
+  border-top: 2px dashed rgb(110 78 44 / 0.45);
+}
+.upd-item.has-pic {
+  grid-template-columns: minmax(0, 1fr) minmax(0, 250px);
+}
+.upd-text {
+  display: grid;
+  justify-items: start;
+  gap: 6px;
+  max-width: 62ch;
+}
+.upd-date {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-family: var(--font-px);
+  font-size: 13px;
+  color: var(--parch-dim);
+}
+.upd-tag {
+  padding: 1px 6px;
+  font-size: 11px;
+  font-weight: 700;
+  color: #fff;
+  background: #9e2620;
+}
+.upd-title {
+  font-family: var(--font-px);
+  font-size: 23px;
+  line-height: 1.15;
+}
+.upd-intro {
+  font-size: 16px;
+  line-height: 1.55;
+}
+.upd-more {
+  margin-top: 2px;
+  padding: 2px 0;
+  border: 0;
+  background: none;
+  cursor: pointer;
+  font-family: var(--font-px);
+  font-size: 15px;
+  font-weight: 600;
+  color: #7a1a14;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.upd-more:hover {
+  color: var(--parch-ink);
+}
+.upd-more span {
+  display: inline-block;
+  transition: transform 0.2s;
+}
+.upd-more:hover span {
+  transform: translateX(3px);
+}
+/* a screenshot taped to the letter, like the photos on the scroll */
+.upd-photo {
+  grid-column: 2;
+  grid-row: 1;
+  position: relative;
+  padding: 5px;
+  background: #fffdf4;
+  box-shadow:
+    0 0 0 2px #1c1009,
+    3px 4px 0 2px rgb(60 36 14 / 0.25);
+  transform: rotate(1deg);
+}
+.upd-item:nth-child(even) .upd-photo {
+  transform: rotate(-0.8deg);
+}
+.upd-photo::before {
+  content: '';
+  position: absolute;
+  z-index: 1;
+  top: -8px;
+  left: 50%;
+  width: 50px;
+  height: 15px;
+  background: rgb(250 246 226 / 0.75);
+  box-shadow: 0 0 0 1px rgb(120 100 70 / 0.3);
+  transform: translateX(-50%) rotate(-2deg);
+}
+.upd-photo img {
+  display: block;
+  width: 100%;
+  aspect-ratio: 16 / 10;
+  object-fit: cover;
+  object-position: 50% 30%; /* a tall screenshot shows its middle, not its header */
+}
+.upd-foot {
+  display: grid;
+  justify-items: center;
+  gap: 10px;
+  padding-top: 4px;
+}
+.upd-rule {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  font-size: 22px;
+  color: var(--parch-dim);
+}
+.upd-rule::before,
+.upd-rule::after {
+  content: '';
+  flex: 1;
+  border-top: 2px dashed rgb(110 78 44 / 0.45);
+}
+.upd-foot .upd-all {
+  color: var(--parch-ink);
+  background: #fffdf4;
+  box-shadow:
+    0 -2px 0 0 #1c1009,
+    0 2px 0 0 #1c1009,
+    -2px 0 0 0 #1c1009,
+    2px 0 0 0 #1c1009,
+    inset 0 -3px 0 0 rgb(0 0 0 / 0.14);
+}
+
+/* on a phone the screenshot goes above its notice */
+@media (max-width: 640px) {
+  .upd-scroll {
+    margin-inline: 20px;
+  }
+  .upd-paper {
+    margin-inline: 8px;
+  }
+  .upd-item.has-pic {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .upd-photo {
+    grid-column: 1;
+    margin-top: 6px;
+  }
+  .upd-photo img {
+    aspect-ratio: 2 / 1;
+  }
+  .upd-title {
+    font-size: 21px;
+  }
+}
