@@ -38,6 +38,7 @@ import lampPostFriend from '../assets/updates/lamp-post-friend.png';
 import lampPostNight from '../assets/updates/lamp-post-night.png';
 import streakCardHidden from '../assets/updates/streak-card-hidden.png';
 import profileIcons from '../assets/updates/profile-icons.png';
+import pinnedNote from '../assets/updates/pinned-note.png';
 
 type Text = Record<Lang, string>;
 
@@ -68,6 +69,40 @@ const days = (n: number): Text => ({ en: `${n} ${n === 1 ? 'day' : 'days'}`, tl:
 const cap = (s: string) => s[0].toUpperCase() + s.slice(1);
 
 export const UPDATES: Update[] = [
+  {
+    id: '2026-11-20-pinned-note',
+    date: '2026-11-20',
+    title: { en: 'Share a note: pin it to your profile', tl: 'Magbahagi ng tala: i-pin ito sa iyong profile' },
+    intro: {
+      en: 'Wrote something you’d like your friends to read? Pin one note to your profile and it shows under your tree, for every member.',
+      tl: 'May naisulat ka bang gusto mong mabasa ng iyong mga kaibigan? Mag-pin ng isang tala sa iyong profile at lalabas ito sa ilalim ng iyong puno, para sa lahat ng miyembro.',
+    },
+    sections: [
+      {
+        heading: { en: 'Pin it from My notes or your profile', tl: 'I-pin mula sa Aking mga tala o sa iyong profile' },
+        text: {
+          en: 'Press Pin on a note in My notes, or go to Menu → My profile → Shared note → Choose a note. It sits on a sheet of paper just under your tree (never over it), and under your tree when friends visit. Their pinned notes show the same way under theirs.',
+          tl: 'Pindutin ang I-pin sa isang tala sa Aking mga tala, o pumunta sa Menu → My profile → Ibinahaging tala → Pumili ng tala. Nakalagay ito sa isang papel sa ilalim mismo ng iyong puno (hindi kailanman sa ibabaw nito), at sa ilalim ng iyong puno kapag dumadalaw ang mga kaibigan. Ganoon din lumalabas ang naka-pin nilang tala sa ilalim ng kanilang puno.',
+        },
+        pictures: [
+          {
+            src: pinnedNote,
+            alt: {
+              en: 'A friend’s pinned note on ruled paper with a red push-pin, under their tree',
+              tl: 'Ang naka-pin na tala ng isang kaibigan sa papel na may guhit at pulang aspile, sa ilalim ng kanilang puno',
+            },
+          },
+        ],
+      },
+      {
+        heading: { en: 'Only that one note is shared', tl: 'Ang isang talang iyon lang ang ibinabahagi' },
+        text: {
+          en: 'Your notes stay locked so only you can read them. Pinning one saves a readable copy of just that note, and the app asks first. Editing the note updates the pin, and Unpin (or deleting the note) takes it down.',
+          tl: 'Mananatiling naka-lock ang iyong mga tala kaya ikaw lang ang makakabasa. Kapag nag-pin ka ng isa, isang kopyang nababasa ng talang iyon lang ang mase-save, at magtatanong muna ang app. Kapag in-edit mo ang tala, susunod ang pin, at maaalis ito kapag pinindot mo ang Alisin ang pin (o binura ang tala).',
+        },
+      },
+    ],
+  },
   {
     id: '2026-11-18-profile-icons',
     date: '2026-11-18',

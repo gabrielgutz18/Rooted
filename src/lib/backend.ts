@@ -51,6 +51,21 @@ export type NoteLock =
 
 export type EntryInput = Pick<Entry, 'subject' | 'note' | 'points' | 'tags'>;
 
+/**
+ * The one note someone pinned to their profile to share it. Every signed-in member can read it
+ * (it shows under their tree), so it is a readable copy: the note in their diary stays locked.
+ * Its points and date always come from the note itself.
+ */
+export interface SharedNote {
+  entry_id: string;
+  subject: string;
+  note: string;
+  tags: string[];
+  points: number;
+  written_at: string; // when the note was written
+  shared_at: string; // when it was pinned
+}
+
 /** What editing a note can change. Its date and the growth it earned stay as they were. */
 export type EntryEdit = Pick<Entry, 'subject' | 'note' | 'tags'>;
 
@@ -99,6 +114,12 @@ export interface Backend {
   removeEntry(id: string): Promise<void>;
   /** Per-day activity for anyone's tree — counts only, never their notes. */
   activity(userId: string): Promise<DayStat[]>;
+  /** The note someone pinned to share, or null (also null before that database update). */
+  sharedNote(userId: string): Promise<SharedNote | null>;
+  /** Pin one of your notes (replacing any pinned before): a readable copy every member can see. */
+  shareNote(entry: Entry): Promise<SharedNote>;
+  /** Unpin: the readable copy is deleted. The note itself stays. */
+  unshareNote(): Promise<void>;
   adminUsers(): Promise<AdminUser[]>;
   /** Waits for a sign-in that is still unlocking, then says whether notes can be read here. */
   noteLock(): Promise<NoteLock>;
@@ -116,6 +137,9 @@ const NEEDS_UPDATE =
   'Private notes need the latest database update (supabase/migrations/20261118000000_private_notes.sql) — ask the admin to run it.';
 const NEEDS_ACCOUNT_SERVER =
   'Usernames need the latest server update (supabase/functions/account and 20261120000000_usernames.sql) — ask the admin to set it up.';
+const NEEDS_SHARING =
+  'Pinning a note needs the latest database update (supabase/migrations/20261122000000_shared_notes.sql) — ask the admin to run it.';
+const NOT_PINNABLE = "That note can't be pinned yet — it's still waiting to upload.";
 const NEEDS_AVATARS = 'Profile icons need the latest database update (supabase/migrations/20261121000000_avatars.sql) — ask the admin to run it.';
 const TAKEN = 'That username is taken.';
 const WRONG_LOGIN = 'Wrong username or password.';
@@ -143,6 +167,9 @@ function cloud(): Backend {
   let level = 0;
   const E = 'id, subject, note, points, tags, created_at, sealed';
   const K = 'salt, iterations, wrapped, recovery_salt, recovery';
+  const S = 'entry_id, subject, note, tags, points, written_at, shared_at';
+  /** Missing table or column (a migration that hasn't been run yet). */
+  const missing = (e: PostgrestError) => ['42703', '42P01', 'PGRST204', 'PGRST205'].includes(e.code);
   type Row = Omit<Entry, 'pending' | 'locked'> & { sealed: string | null };
 
   /** Missing table or column: the private-notes migration hasn't been run yet. */
@@ -480,6 +507,13 @@ function cloud(): Backend {
       const { data, error } = await sb.from('entries').update({ subject: LOCKED_SUBJECT, note: '', tags: [], sealed }).eq('id', id).select('id');
       if (error) throw explain(error);
       if (!data?.length) throw new Error('That note is gone — it may have been deleted on another device.');
+      // pinned to share? its readable copy follows the new words (best effort)
+      try {
+        const uid = (await me()).id;
+        await sb.from('shared_notes').update({ subject: edit.subject, note: edit.note, tags: edit.tags }).eq('user_id', uid).eq('entry_id', id);
+      } catch {
+        /* the sharing migration isn't run, or the connection dropped */
+      }
     },
     async removeEntry(id) {
       const { error } = await sb.from('entries').delete().eq('id', id);
@@ -490,6 +524,30 @@ function cloud(): Backend {
       const { data, error } = await sb.rpc('activity_days', { target: userId, tz });
       if (error) throw error;
       return (data ?? []) as DayStat[];
+    },
+    async sharedNote(userId) {
+      const { data, error } = await sb.from('shared_notes').select(S).eq('user_id', userId).maybeSingle();
+      if (error) {
+        if (missing(error)) return null; // nobody can have pinned one yet
+        throw error;
+      }
+      return data as SharedNote | null;
+    },
+    async shareNote(entry) {
+      if (entry.pending || entry.locked) throw new Error(NOT_PINNABLE);
+      const { id } = await me();
+      const { data, error } = await sb
+        .from('shared_notes')
+        .upsert({ user_id: id, entry_id: entry.id, subject: entry.subject, note: entry.note, tags: entry.tags }, { onConflict: 'user_id' })
+        .select(S)
+        .single();
+      if (error) throw missing(error) ? new Error(NEEDS_SHARING) : error;
+      return data as SharedNote;
+    },
+    async unshareNote() {
+      const { id } = await me();
+      const { error } = await sb.from('shared_notes').delete().eq('user_id', id);
+      if (error && !missing(error)) throw error;
     },
     async adminUsers() {
       const { data, error } = await sb.rpc('admin_list_users');
@@ -553,6 +611,8 @@ interface LocalDB {
   users: { id: string; name: string; username?: string | null; email?: string; is_admin: boolean; created_at: string; tree?: string | null; avatar?: string | null }[];
   entries: (Entry & { user_id: string })[];
   session: string | null;
+  /** each person's pinned note, by user id */
+  shared?: Record<string, SharedNote>;
 }
 
 const KEY = 'rooted.v2';
@@ -710,16 +770,49 @@ function local(): Backend {
       const entry = db.entries.find((e) => e.id === id && e.user_id === owner);
       if (!entry) throw new Error('That note is gone.');
       Object.assign(entry, { subject: edit.subject, note: edit.note, tags: edit.tags });
+      const pin = db.shared?.[owner];
+      if (pin?.entry_id === id) Object.assign(pin, { subject: edit.subject, note: edit.note, tags: edit.tags });
       write(db);
     },
     async removeEntry(id) {
       const db = read();
       const owner = me(db);
       db.entries = db.entries.filter((e) => !(e.id === id && e.user_id === owner));
+      if (db.shared?.[owner]?.entry_id === id) delete db.shared[owner]; // its pin goes with it
       write(db);
     },
     async activity(userId) {
       return dayStats(read().entries.filter((e) => e.user_id === userId));
+    },
+    async sharedNote(userId) {
+      const db = read();
+      const pin = db.shared?.[userId];
+      return pin && db.entries.some((e) => e.id === pin.entry_id && e.user_id === userId) ? pin : null;
+    },
+    async shareNote(entry) {
+      const db = read();
+      const owner = me(db);
+      const saved = db.entries.find((e) => e.id === entry.id && e.user_id === owner);
+      if (!saved) throw new Error('You can only pin your own notes.');
+      const before = db.shared?.[owner];
+      const pin: SharedNote = {
+        entry_id: saved.id,
+        subject: entry.subject,
+        note: entry.note,
+        tags: entry.tags,
+        points: saved.points,
+        written_at: saved.created_at,
+        shared_at: before?.entry_id === saved.id ? before.shared_at : new Date().toISOString(),
+      };
+      db.shared = { ...db.shared, [owner]: pin };
+      write(db);
+      return pin;
+    },
+    async unshareNote() {
+      const db = read();
+      const owner = me(db);
+      if (db.shared) delete db.shared[owner];
+      write(db);
     },
     async adminUsers() {
       const db = read();

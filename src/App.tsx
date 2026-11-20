@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { backend, type AdminUser, type Entry, type EntryEdit, type EntryInput, type NoteLock, type Profile } from './lib/backend';
+import { backend, type AdminUser, type Entry, type EntryEdit, type EntryInput, type NoteLock, type Profile, type SharedNote } from './lib/backend';
 import { ARRIVALS, dayKey, dayStats, dayStreak, stageFor, type DayStat } from './lib/growth';
 import { dayOf, daysIdle, lastDayOf } from './lib/streak';
 import { errorText, strings, useT } from './lib/i18n';
@@ -16,6 +16,7 @@ import { hasUnseenUpdate, markUpdatesSeen } from './lib/updates';
 import { RecoveryDialog, UnlockPanel } from './components/Unlock';
 import UsernameDialog from './components/UsernameDialog';
 import ProfilePanel from './components/ProfilePanel';
+import { PinnedNote } from './components/SharedNote';
 import { Avatar } from './components/Avatar';
 import { speciesOf } from './scene/species';
 import { isStandalone, useInstall } from './lib/install';
@@ -121,6 +122,11 @@ function Garden({ userId, hidden }: { userId: string; hidden: boolean }) {
   const [view, setView] = useState<View>({ kind: 'home' });
   const [visitDays, setVisitDays] = useState<DayStat[] | null>(null); // null while loading
   const visitId = useRef<string | null>(null); // a late answer for a tree no longer shown is dropped
+  // the note pinned to share, shown under the tree: yours, and the friend's being visited
+  // (undefined while loading, null when none)
+  const [myPin, setMyPin] = useState<SharedNote | null | undefined>(snap?.pin);
+  const [visitPin, setVisitPin] = useState<SharedNote | null | undefined>(undefined);
+  const [shareFocus, setShareFocus] = useState(0); // "Change" on your pinned note opens it in your profile
   const [menuOpen, setMenuOpen] = useState(false);
   const [picking, setPicking] = useState(false);
   const [installHelp, setInstallHelp] = useState(false);
@@ -201,6 +207,8 @@ function Garden({ userId, hidden }: { userId: string; hidden: boolean }) {
     });
     // Offline, these requests can take ~30 s to fail; the tree from last time is already
     // showing, so say so sooner. (Anything that does arrive later is still used.)
+    // the pinned note is extra: if it can't load, the last-seen copy (or none) stays
+    backend.sharedNote(userId).then(setMyPin, () => setMyPin((p) => (p === undefined ? null : p)));
     withTimeout(Promise.all([backend.profile(userId).then(setMe), notes, loadPeople()]), 10000)
       .then(() => syncNow())
       .catch((err) => setError(snap ? strings().showingCached : message(err)))
@@ -234,8 +242,8 @@ function Garden({ userId, hidden }: { userId: string; hidden: boolean }) {
   }, [syncNow]);
 
   useEffect(() => {
-    if (cloud && me) writeSnapshot(userId, { me, entries, people });
-  }, [userId, me, entries, people]);
+    if (cloud && me) writeSnapshot(userId, { me, entries, people, pin: myPin });
+  }, [userId, me, entries, people, myPin]);
 
   useEffect(() => {
     if (!notice) return;
@@ -397,6 +405,30 @@ function Garden({ userId, hidden }: { userId: string; hidden: boolean }) {
       }
     }
     setEntries((list) => list.map((e) => (e.id === id ? { ...e, ...change } : e)));
+    // the pinned copy follows the new words (the backend saved them there too)
+    setMyPin((p) => (p?.entry_id === id ? { ...p, ...change } : p));
+  }
+
+  /** Pin a note to share it (under your tree, for every member). Throws so the form stays open. */
+  async function pinNote(entry: Entry) {
+    try {
+      setMyPin(await backend.shareNote(entry));
+      setNotice(t.shareDone);
+    } catch (err) {
+      setError(message(err));
+      throw err;
+    }
+  }
+
+  async function unpinNote() {
+    try {
+      await backend.unshareNote();
+      setMyPin(null);
+      setNotice(t.unpinDone);
+    } catch (err) {
+      setError(message(err));
+      throw err;
+    }
   }
 
   async function remove(id: string) {
@@ -408,6 +440,7 @@ function Garden({ userId, hidden }: { userId: string; hidden: boolean }) {
     try {
       await backend.removeEntry(id);
       setEntries((list) => list.filter((e) => e.id !== id));
+      setMyPin((p) => (p?.entry_id === id ? null : p)); // a deleted note is unpinned with it
     } catch (err) {
       setError(message(err));
     }
@@ -420,11 +453,16 @@ function Garden({ userId, hidden }: { userId: string; hidden: boolean }) {
     window.scrollTo({ top: 0 });
     if (next.kind === 'visit') {
       setVisitDays(null);
+      setVisitPin(undefined);
       const id = (visitId.current = next.profile.id);
       backend
         .activity(id)
         .then((days) => visitId.current === id && setVisitDays(days))
         .catch((err) => setError(message(err)));
+      backend.sharedNote(id).then(
+        (pin) => visitId.current === id && setVisitPin(pin),
+        () => visitId.current === id && setVisitPin(null),
+      );
     } else {
       visitId.current = null;
     }
@@ -460,6 +498,7 @@ function Garden({ userId, hidden }: { userId: string; hidden: boolean }) {
             points={visiting.points}
             notes={visiting.entry_count}
             streak={visitDays ? dayStreak(visitDays) : undefined}
+            share={{ pin: visitPin }}
             onBack={closeProfile}
           />
         ) : profileOf === userId && me ? (
@@ -477,6 +516,8 @@ function Garden({ userId, hidden }: { userId: string; hidden: boolean }) {
               setPicking(true);
             }}
             onAvatar={chooseAvatar}
+            share={{ pin: myPin, entries, canPick: open, onPin: pinNote, onUnpin: unpinNote }}
+            focusShare={shareFocus}
             onBack={closeProfile}
           />
         ) : (
@@ -585,6 +626,23 @@ function Garden({ userId, hidden }: { userId: string; hidden: boolean }) {
         />
 
         <div className="body">
+          {/* the pinned note sits under the tree, never over it */}
+          {view.kind === 'home' && myPin && me && (
+            <PinnedNote
+              key={myPin.entry_id}
+              pin={myPin}
+              owner={me}
+              mine
+              onChange={() => {
+                setProfileOf(userId);
+                setMenuOpen(true); // on a phone the profile is in the menu drawer
+                setShareFocus((n) => n + 1);
+              }}
+              onUnpin={() => unpinNote().catch(() => {})}
+            />
+          )}
+          {visiting && visitPin && <PinnedNote key={visiting.id} pin={visitPin} owner={visiting} mine={false} />}
+
           {view.kind === 'home' && (
             <>
               {lock && !lock.open ? <UnlockPanel hasKey={lock.hasKey} problem={lock.problem} onOpen={unlocked} /> : <Composer entries={entries} onSave={save} />}
@@ -596,7 +654,17 @@ function Garden({ userId, hidden }: { userId: string; hidden: boolean }) {
                 </div>
                 <Heatmap days={myDays} />
               </section>
-              {open && <Notes entries={entries} loading={loading} onEdit={edit} onDelete={remove} />}
+              {open && (
+                <Notes
+                  entries={entries}
+                  loading={loading}
+                  onEdit={edit}
+                  onDelete={remove}
+                  pinnedId={myPin?.entry_id ?? null}
+                  onPin={pinNote}
+                  onUnpin={unpinNote}
+                />
+              )}
             </>
           )}
 
@@ -622,7 +690,7 @@ function Garden({ userId, hidden }: { userId: string; hidden: boolean }) {
                 <Stat value={t.stages[stageFor(visiting.points).index]} label={t.statStage} />
               </div>
               <Heatmap key={visiting.id} days={visitDays ?? []} />
-              <p className="muted small">{t.notesPrivate}</p>
+              <p className="muted small">{visitPin ? t.notesPrivatePinned : t.notesPrivate}</p>
             </section>
           )}
 

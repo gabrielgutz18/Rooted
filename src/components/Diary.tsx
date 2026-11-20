@@ -256,15 +256,31 @@ export function Notes({
   loading,
   onEdit,
   onDelete,
+  pinnedId,
+  onPin,
+  onUnpin,
 }: {
   entries: Entry[];
   loading: boolean;
   onEdit(id: string, edit: EntryEdit): Promise<void>;
   onDelete(id: string): Promise<void>;
+  /** the note pinned to your profile to share, if any */
+  pinnedId?: string | null;
+  onPin?(entry: Entry): Promise<void>;
+  onUnpin?(): Promise<void>;
 }) {
   const t = useT();
   const [query, setQuery] = useState('');
   const [confirm, setConfirm] = useState<string | null>(null);
+  const [pinAsk, setPinAsk] = useState<string | null>(null); // "share it with everyone?" on this note
+  const [pinBusy, setPinBusy] = useState(false);
+  const pinJob = (job: () => Promise<void>) => {
+    setPinBusy(true);
+    job()
+      .then(() => setPinAsk(null))
+      .catch(() => {}) // the app shows what went wrong
+      .finally(() => setPinBusy(false));
+  };
   const [open, setOpen] = useState<string | null>(null);
   const [editing, setEditing] = useState<string | null>(null);
   const stampFmt = useMemo(
@@ -325,6 +341,7 @@ export function Notes({
               <li key={e.id} className="note">
                 <div className="note-head">
                   <h3 className="note-subject">{e.locked ? `🔒 ${t.lockedNote}` : e.subject}</h3>
+                  {pinnedId === e.id && <span className="tag tag-pinned">📌 {t.pinnedTag}</span>}
                   {e.pending && (
                     <span className="tag tag-pending" title={t.pendingTitle}>
                       {t.pendingTag}
@@ -337,6 +354,19 @@ export function Notes({
                 </time>
                 {e.locked && <p className="muted small">{t.lockedNoteBody}</p>}
                 {e.note && <p className={`note-body ${long && !expanded ? 'is-clamped' : ''}`}>{e.note}</p>}
+                {pinAsk === e.id && (
+                  <div className="pin-ask" role="group" aria-label={t.pinNoteLabel(e.subject)}>
+                    <p>{pinnedId ? t.pinConfirmReplace : t.pinConfirm}</p>
+                    <span className="note-edit-actions">
+                      <button className="btn btn-small" disabled={pinBusy} onClick={() => setPinAsk(null)}>
+                        {t.keepPrivate}
+                      </button>
+                      <button className="btn btn-primary btn-small" disabled={pinBusy} onClick={() => pinJob(() => onPin!(e))}>
+                        {pinBusy ? t.saving : t.yesPin}
+                      </button>
+                    </span>
+                  </div>
+                )}
                 <div className="note-foot">
                   <span className="tags">
                     {e.tags.map((g) => (
@@ -350,6 +380,28 @@ export function Notes({
                       <button className="link" onClick={() => setOpen(expanded ? null : e.id)}>
                         {expanded ? t.showLess : t.readMore}
                       </button>
+                    )}
+                    {pinnedId === e.id && onUnpin && confirm !== e.id ? (
+                      <button className="link" disabled={pinBusy} onClick={() => pinJob(onUnpin)}>
+                        {t.unpin}
+                      </button>
+                    ) : (
+                      onPin &&
+                      !e.locked &&
+                      !e.pending &&
+                      confirm !== e.id &&
+                      pinAsk !== e.id && (
+                        <button
+                          className="link"
+                          onClick={() => {
+                            setPinAsk(e.id);
+                            setConfirm(null);
+                          }}
+                          aria-label={t.pinNoteLabel(e.subject)}
+                        >
+                          {t.pin}
+                        </button>
+                      )
                     )}
                     {!e.locked && confirm !== e.id && (
                       <button
@@ -373,7 +425,13 @@ export function Notes({
                         </button>
                       </>
                     ) : (
-                      <button className="link" onClick={() => setConfirm(e.id)}>
+                      <button
+                        className="link"
+                        onClick={() => {
+                          setConfirm(e.id);
+                          setPinAsk(null);
+                        }}
+                      >
                         {t.del}
                       </button>
                     )}

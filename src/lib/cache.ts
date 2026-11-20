@@ -3,12 +3,14 @@
 // Only used with Supabase; trial mode already keeps everything in the browser.
 // Cleared when you sign out, so the next person on a shared device can't see it.
 
-import type { Entry, Profile } from './backend';
+import type { Entry, Profile, SharedNote } from './backend';
 
 export interface Snapshot {
   me: Profile | null;
   entries: Entry[];
   people: Profile[];
+  /** the note you pinned to share (missing in copies saved before pinning existed) */
+  pin?: SharedNote | null;
 }
 
 const PREFIX = 'rooted.cache.v1.';

@@ -22,8 +22,13 @@
   --heat-2: #7cc35a;
   --heat-3: #429a3a;
   --heat-4: #1f6a2a;
+  /* the paper of a pinned note (src/components/SharedNote.tsx) */
+  --paper: #fff6d6;
+  --paper-rule: rgb(70 120 170 / 0.16);
+  --paper-margin: rgb(217 72 59 / 0.4);
 }
 :root[data-period='dawn'] {
+  --paper: #fff1e2;
   --bg: #f6e3d3;
   --panel: #fff8ee;
   --panel-2: #f8e9d8;
@@ -43,6 +48,9 @@
   --accent-ink: #2a1408;
   --danger: #ff8f84;
   --heat-0: #4c3a5c;
+  --paper: #4a3658;
+  --paper-rule: rgb(255 236 214 / 0.09);
+  --paper-margin: rgb(255 143 132 / 0.38);
   --heat-1: #5f7a48;
   --heat-2: #74a34c;
   --heat-3: #92c95a;
@@ -61,6 +69,9 @@
   --accent-ink: #10200a;
   --danger: #ff8f84;
   --heat-0: #262b52;
+  --paper: #232a56;
+  --paper-rule: rgb(220 226 255 / 0.08);
+  --paper-margin: rgb(255 143 132 / 0.32);
   --heat-1: #2f5a44;
   --heat-2: #3f8a48;
   --heat-3: #6cbf50;
@@ -2448,4 +2459,224 @@ p {
 /* the garden stays open behind /developer (so a note being written is kept), just not shown */
 .shell[hidden] {
   display: none;
+}
+
+/* ---------- a note pinned to share (src/components/SharedNote.tsx) ----------
+   Under the tree, never over it: a sheet of ruled paper held on with a pixel push-pin. */
+.pinned {
+  --rule: 29px; /* one line of the note = one ruled line of the paper */
+  position: relative;
+  display: grid;
+  gap: 12px;
+  margin: 18px var(--b) var(--b);
+  padding: 24px 20px 18px;
+  background: var(--panel);
+  box-shadow:
+    0 calc(var(--b) * -1) 0 0 var(--line),
+    0 var(--b) 0 0 var(--line),
+    calc(var(--b) * -1) 0 0 0 var(--line),
+    var(--b) 0 0 0 var(--line),
+    0 calc(var(--b) * 3) 0 0 var(--shadow);
+  transition: background-color 0.6s;
+}
+.pin-tack {
+  position: absolute;
+  top: -22px;
+  left: 50%;
+  transform: translateX(-50%);
+  filter: drop-shadow(3px 3px 0 rgb(0 0 0 / 0.22));
+}
+.pinned-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.pinned-who {
+  flex: 1;
+  min-width: 0;
+  display: grid;
+  gap: 2px;
+}
+.pinned-label {
+  font-size: 19px;
+  overflow-wrap: anywhere;
+}
+.pinned-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0 12px;
+}
+/* "every member can read it", with a little open-eye mark */
+.pinned-shared::before {
+  content: '◉ ';
+  color: var(--accent);
+}
+.pinned-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 2px 6px;
+  align-self: flex-start;
+}
+.pinned-paper {
+  position: relative;
+  padding: 14px 18px 16px 34px;
+  background-color: var(--paper);
+  /* ruled lines, lined up with the text below */
+  background-image: linear-gradient(to bottom, transparent calc(var(--rule) - 2px), var(--paper-rule) calc(var(--rule) - 2px));
+  background-size: 100% var(--rule);
+  background-position: 0 14px;
+  box-shadow: 0 0 0 2px var(--line);
+  transition: background-color 0.6s;
+}
+/* the red margin line of a notebook page */
+.pinned-paper::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 20px;
+  width: 2px;
+  background: var(--paper-margin);
+}
+.pinned-subject {
+  font-size: 22px;
+  line-height: var(--rule);
+  overflow-wrap: anywhere;
+}
+.pinned-body {
+  font-size: 17px;
+  line-height: var(--rule);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  max-width: 68ch;
+}
+.pinned-body.is-clamped {
+  display: -webkit-box;
+  -webkit-line-clamp: 6;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.pinned-foot {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: center;
+  gap: 6px;
+}
+@media (max-width: 520px) {
+  .pinned {
+    padding: 22px 14px 14px;
+  }
+  .pinned-paper {
+    padding: 12px 12px 14px 28px;
+    background-position: 0 12px;
+  }
+  .pinned-paper::before {
+    left: 15px;
+  }
+  .pinned-subject {
+    font-size: 20px;
+  }
+  .pinned-body {
+    font-size: 16px;
+  }
+}
+
+/* in My notes: which one is pinned, and "share it with everyone?" */
+.tag-pinned {
+  background: var(--paper);
+}
+.pin-ask {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+  margin: 8px 2px 2px;
+  padding: 10px 12px;
+  background: var(--paper);
+  box-shadow: 0 0 0 2px var(--line);
+}
+.pin-ask p {
+  flex: 1 1 220px;
+  font-weight: 700;
+}
+
+/* Profile → Shared note, in the side menu */
+.share-choose,
+.share-confirm {
+  display: grid;
+  gap: 8px;
+}
+.share-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.pin-preview {
+  display: grid;
+  gap: 4px;
+  margin: 2px;
+  padding: 10px 12px 10px 16px;
+  background: var(--paper);
+  box-shadow: 0 0 0 2px var(--line), inset 4px 0 0 0 var(--paper-margin);
+}
+.pin-preview-subject {
+  font-weight: 700;
+  overflow-wrap: anywhere;
+}
+.side-profile .pin-preview-body {
+  font-size: 14px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.side-profile .share-warn {
+  margin: 2px;
+  padding: 8px 10px;
+  font-size: 13px;
+  background: var(--panel-2);
+  box-shadow: 0 0 0 2px var(--line), inset 4px 0 0 0 var(--danger);
+}
+.share-list {
+  list-style: none;
+  margin: 0;
+  padding: 2px;
+  display: grid;
+  gap: 6px;
+  max-height: 280px;
+  overflow-y: auto;
+}
+.share-pick {
+  width: 100%;
+  display: grid;
+  gap: 1px;
+  padding: 7px 10px;
+  border: 0;
+  text-align: left;
+  font: inherit;
+  color: var(--ink);
+  background: var(--panel-2);
+  box-shadow: 0 0 0 2px var(--line);
+  cursor: pointer;
+}
+.share-pick:hover {
+  filter: brightness(1.06);
+}
+.share-pick.is-on {
+  box-shadow: 0 0 0 2px var(--line), inset 4px 0 0 0 var(--paper-margin);
+}
+.share-pick-subject {
+  font-weight: 700;
+  font-size: 14px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.share-pick-meta {
+  font-size: 12px;
+  color: var(--ink-dim);
 }

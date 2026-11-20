@@ -1,10 +1,11 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { backend, type Profile } from '../lib/backend';
+import { backend, type Entry, type Profile, type SharedNote } from '../lib/backend';
 import { stageFor } from '../lib/growth';
 import { useT } from '../lib/i18n';
 import { speciesOf } from '../scene/species';
 import { UsernameForm } from './UsernameDialog';
 import { Avatar } from './Avatar';
+import { ShareSection } from './SharedNote';
 import { AVATAR_IDS, BACKDROP_IDS, avatarValue, backdropOf, parseAvatar, type AvatarChoice } from '../lib/avatars';
 
 /**
@@ -12,7 +13,8 @@ import { AVATAR_IDS, BACKDROP_IDS, avatarValue, backdropOf, parseAvatar, type Av
  *  - yours (Menu → My profile): also how you sign in; change your username like a handle,
  *    or (older email accounts) add one; change your tree.
  *  - a friend's (View profile, while visiting their tree): who they are and how their tree
- *    is growing. Never their notes, and nothing about how they sign in.
+ *    is growing. Never their notes (only the one they pinned to share), and nothing about
+ *    how they sign in.
  */
 export default function ProfilePanel({
   me,
@@ -23,6 +25,8 @@ export default function ProfilePanel({
   onUsername,
   onChangeTree,
   onAvatar,
+  share,
+  focusShare,
   onBack,
 }: {
   /** whose profile (yours, or a friend's) */
@@ -36,6 +40,16 @@ export default function ProfilePanel({
   onChangeTree?(): void;
   /** Your profile icon was chosen (null: none). */
   onAvatar?(avatar: string | null): void;
+  /** The note pinned to share (Profile → Shared note). Leave out to hide that part. */
+  share?: {
+    pin: SharedNote | null | undefined;
+    entries?: Entry[];
+    canPick?: boolean;
+    onPin?(entry: Entry): Promise<void>;
+    onUnpin?(): Promise<void>;
+  };
+  /** Bumped by "Change" on the pinned note under the tree: go to the shared note. */
+  focusShare?: number;
   onBack(): void;
 }) {
   const t = useT();
@@ -65,11 +79,18 @@ export default function ProfilePanel({
 
   // keyboard: start on Back (the menu was just replaced), Escape goes back to the menu
   useEffect(() => {
-    backBtn.current?.focus();
+    if (!focusShare) backBtn.current?.focus();
     const onKey = (e: KeyboardEvent) => e.key === 'Escape' && back.current();
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
   }, []);
+
+  useEffect(() => {
+    if (!focusShare) return;
+    const box = document.getElementById('share-note');
+    box?.scrollIntoView({ block: 'center' });
+    box?.querySelector<HTMLButtonElement>('.share-buttons button')?.focus({ preventScroll: true });
+  }, [focusShare]);
 
   useEffect(() => {
     if (mine) backend.signInEmail().then(setEmail, () => setEmail(null));
@@ -231,8 +252,10 @@ export default function ProfilePanel({
         </div>
       </dl>
 
+      {share && <ShareSection owner={me} mine={mine} {...share} />}
+
       {mine && me.is_admin && <p className="muted small">{t.adminKeepsEmail}</p>}
-      {!mine && <p className="muted small">{t.notesPrivate}</p>}
+      {!mine && <p className="muted small">{share?.pin ? t.notesPrivatePinned : t.notesPrivate}</p>}
 
       {canChangeName && changing && (
         <section className="profile-add" aria-labelledby="change-username-title">

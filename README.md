@@ -180,7 +180,20 @@ Facebook keeps a copy of a preview for a while; its Sharing Debugger fetches it 
 | Picking or changing a username (checks it's free as you type) | `src/components/UsernameDialog.tsx` |
 | Your profile (Menu → My profile, opens inside the side menu) | `src/components/ProfilePanel.tsx` |
 | Profile icons: the pixel art, background colours and how they're drawn | `src/lib/avatars.ts`, `src/components/Avatar.tsx` |
+| Pinned (shared) notes: the paper card under the tree, Profile → Shared note | `src/components/SharedNote.tsx` |
 | Choosing or changing a username, password resets (server) | `supabase/functions/account/index.ts` |
+
+## Sharing a note
+
+Each member can **pin one note** to their profile to share it: from My notes (**Pin**) or
+Menu → My profile → **Shared note**. It shows on a sheet of ruled paper just *under* their tree
+(not over it), for them and for every member who visits their tree, and in their profile.
+Editing the note updates the pin; **Unpin**, or deleting the note, takes it down.
+
+Because notes are encrypted, pinning saves a separate **readable copy** of that one note in
+`shared_notes` (the app says so before pinning). The note in the diary stays locked, and so do all
+the others. Needs `supabase/migrations/20261122000000_shared_notes.sql`; until it is run the app
+works as before and pinning asks for that update.
 
 ## Privacy
 
@@ -190,7 +203,8 @@ access can read them: not friends, not Supabase, and not the admin (not even fro
 dashboard's table editor or SQL editor).
 
 - **What stays readable** (the tree and squares need it): each note's points and date, the
-  number of notes, and the profile (name, username, tree). Subject, note text and tags are
+  number of notes, the profile (name, username, tree), and the one note a member chose to pin
+  (see Sharing a note). Subject, note text and tags are
   locked. Emails exist only for the admin and for members who joined before usernames, and
   only the admin can see them.
 - **How the key works:** each person has a random note key (AES-256-GCM). The server
