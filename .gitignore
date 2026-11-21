@@ -26,3 +26,6 @@ supabase/.branches/
 *.log
 .DS_Store
 Thumbs.db
+
+# admin-only SQL notes (usernames, owner-level scripts) — keep local
+supabase/sqleditor.md   

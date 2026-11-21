@@ -174,6 +174,7 @@ Facebook keeps a copy of a preview for a while; its Sharing Debugger fetches it 
 | Animal pixel art | `src/scene/sprites.ts` |
 | Tree picker | `src/components/TreePicker.tsx` |
 | Database tables and security rules | `supabase/migrations/` |
+| Admin fixes to paste into the SQL Editor (bring back a streak, remove placeholder notes) | `supabase/sqleditor.md` |
 | Note encryption (keys, locking, recovery key) | `src/lib/vault.ts` |
 | Unlock screen and recovery key dialog | `src/components/Unlock.tsx` |
 | Username rules and the stand-in email | `src/lib/username.ts` |

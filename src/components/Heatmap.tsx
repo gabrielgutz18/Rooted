@@ -6,6 +6,9 @@ const WEEKS = 53;
 
 const level = (points: number) => (points <= 0 ? 0 : points < 15 ? 1 : points < 30 ? 2 : points < 50 ? 3 : 4);
 
+/** A day with any note is at least the lightest green, so 0-point notes (admin placeholders) still show. */
+const dayLevel = (stat?: DayStat) => (stat && stat.count > 0 ? Math.max(1, level(stat.points)) : 0);
+
 /** GitHub-style year of activity: one square per day, greener the more the tree grew. */
 export default function Heatmap({ days }: { days: DayStat[] }) {
   const t = useT();
@@ -56,7 +59,7 @@ export default function Heatmap({ days }: { days: DayStat[] }) {
                 ) : (
                   <span
                     key={c.key}
-                    className={`heat-cell l${level(c.stat?.points ?? 0)}`}
+                    className={`heat-cell l${dayLevel(c.stat)}`}
                     title={c.stat ? t.dayTitle(c.stat.count, c.stat.points, fmt.format(c.date)) : t.nothingYet(fmt.format(c.date))}
                   />
                 ),
