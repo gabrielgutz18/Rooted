@@ -70,6 +70,30 @@ const cap = (s: string) => s[0].toUpperCase() + s.slice(1);
 
 export const UPDATES: Update[] = [
   {
+    id: '2026-11-22-icon-fix',
+    date: '2026-11-22',
+    title: { en: 'Fixed: changing your profile icon', tl: 'Naayos: pagpapalit ng icon ng profile' },
+    intro: {
+      en: 'Some of you tried to pick a new profile icon and got an error instead. That’s fixed now — sorry for the trouble!',
+      tl: 'Sinubukan ng ilan sa inyo na pumili ng bagong icon ng profile pero error ang lumabas. Naayos na iyon ngayon — paumanhin sa abala!',
+    },
+    sections: [
+      {
+        heading: { en: 'Pick your icon again', tl: 'Pumili muli ng iyong icon' },
+        text: {
+          en: 'If it didn’t work for you before, open Menu → My profile and press Change beside Your icon. Any icon on any background colour saves now, and your friends will see it next to your name.',
+          tl: 'Kung hindi ito gumana sa iyo dati, buksan ang Menu → Aking profile at pindutin ang Palitan sa tabi ng Iyong icon. Mase-save na ang anumang icon sa anumang kulay sa likod, at makikita ito ng iyong mga kaibigan sa tabi ng iyong pangalan.',
+        },
+        pictures: [
+          {
+            src: profileIcons,
+            alt: { en: 'My profile with the grid of pixel icons and the row of background colours', tl: 'Ang Aking profile na may mga pixel na icon at mga kulay sa likod' },
+          },
+        ],
+      },
+    ],
+  },
+  {
     id: '2026-11-20-pinned-note',
     date: '2026-11-20',
     title: { en: 'Share a note: pin it to your profile', tl: 'Magbahagi ng tala: i-pin ito sa iyong profile' },
