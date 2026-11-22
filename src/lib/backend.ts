@@ -9,6 +9,7 @@ import * as vault from './vault';
 import { isAvatarValue } from './avatars';
 import { isOffline, withTimeout } from './outbox';
 import { BAD_USERNAME, USERNAME_DOMAIN, isValidUsername, loginEmail, normalizeUsername, usernameEmail } from './username';
+import { BAD_NAME, cleanName } from './names';
 
 export interface Profile {
   id: string;
@@ -107,6 +108,8 @@ export interface Backend {
   setTree(tree: string): Promise<void>;
   /** Your profile icon (one of src/lib/avatars.ts), or null for none. */
   setAvatar(avatar: string | null): Promise<void>;
+  /** Your name, the one friends see (src/lib/names.ts); returns it as saved. Sign-in stays the same. */
+  setName(name: string): Promise<string>;
   listEntries(): Promise<Entry[]>;
   addEntry(input: EntryInput, keep?: KeepAs): Promise<Entry>;
   /** Rewrites a saved note's subject, note and tags (locked again with the same key). */
@@ -142,6 +145,7 @@ const NEEDS_SHARING =
 const NOT_PINNABLE = "That note can't be pinned yet — it's still waiting to upload.";
 const NEEDS_AVATARS = 'Profile icons need the latest database update (supabase/migrations/20261121000000_avatars.sql) — ask the admin to run it.';
 const NEEDS_AVATAR_FIX = 'Profile icons need a database fix (supabase/migrations/20261122000001_avatar_check_fix.sql) — ask the admin to run it.';
+const NEEDS_NAMES = 'Changing your name needs the latest database update (supabase/migrations/20261122000003_real_names.sql) — ask the admin to run it.';
 const TAKEN = 'That username is taken.';
 const WRONG_LOGIN = 'Wrong username or password.';
 const LOCKED_SUBJECT = 'locked'; // what the database holds in place of a locked note's subject
@@ -462,6 +466,19 @@ function cloud(): Backend {
         throw error;
       }
     },
+    async setName(raw) {
+      const name = cleanName(raw);
+      if (!name) throw new Error(BAD_NAME);
+      const { id } = await me();
+      const { error } = await sb.from('profiles').update({ display_name: name }).eq('id', id);
+      if (error) {
+        // members can't change the name until 20261122000003_real_names.sql grants it
+        if (error.code === '42501' || /permission denied/i.test(error.message)) throw new Error(NEEDS_NAMES);
+        if (error.code === '23514') throw new Error(BAD_NAME);
+        throw error;
+      }
+      return name;
+    },
     async listEntries() {
       const key = await noteKey();
       const rows: Row[] = [];
@@ -757,6 +774,16 @@ function local(): Backend {
       if (!user) throw new Error('Not signed in');
       user.avatar = avatar;
       write(db);
+    },
+    async setName(raw) {
+      const name = cleanName(raw);
+      if (!name) throw new Error(BAD_NAME);
+      const db = read();
+      const user = db.users.find((u) => u.id === me(db));
+      if (!user) throw new Error('Not signed in');
+      user.name = name;
+      write(db);
+      return name;
     },
     async listEntries() {
       const db = read();

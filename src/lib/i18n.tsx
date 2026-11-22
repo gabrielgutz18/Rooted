@@ -296,6 +296,18 @@ const en = {
   // your profile (Menu → My profile)
   profileMenu: 'My profile',
   profileTitle: 'Your profile',
+  // your name (src/lib/names.ts): the one friends see; sign-in stays the same
+  nameTitle: 'Your name',
+  nameChange: 'Change your name',
+  nameIntro: (username: string | null) =>
+    username
+      ? `Put your real name so your friends know it’s you. You still sign in with @${username}.`
+      : 'Put your real name so your friends know it’s you. You still sign in the same way.',
+  nameLabel: 'Name',
+  namePlaceholder: 'e.g. Juan Dela Cruz',
+  nameSave: 'Save name',
+  nameSaved: (name: string) => `Saved — your friends now see you as “${name}”.`,
+  nameSameAsUsername: 'same as your username',
   // profile icons (src/lib/avatars.ts)
   iconTitle: 'Your icon',
   iconChoose: 'Choose your icon',
@@ -771,6 +783,17 @@ const tl: Strings = {
 
   profileMenu: 'Aking profile',
   profileTitle: 'Iyong profile',
+  nameTitle: 'Iyong pangalan',
+  nameChange: 'Palitan ang iyong pangalan',
+  nameIntro: (username) =>
+    username
+      ? `Ilagay ang tunay mong pangalan para makilala ka ng iyong mga kaibigan. @${username} pa rin ang gamit mo sa pag-sign in.`
+      : 'Ilagay ang tunay mong pangalan para makilala ka ng iyong mga kaibigan. Ganoon pa rin ang pag-sign in mo.',
+  nameLabel: 'Pangalan',
+  namePlaceholder: 'hal. Juan Dela Cruz',
+  nameSave: 'I-save ang pangalan',
+  nameSaved: (name) => `Na-save — “${name}” na ang nakikita ng iyong mga kaibigan.`,
+  nameSameAsUsername: 'kapareho ng iyong username',
   iconTitle: 'Iyong icon',
   iconChoose: 'Pumili ng iyong icon',
   iconChange: 'Palitan ang iyong icon',
@@ -980,6 +1003,10 @@ const tl: Strings = {
     "That isn't the password your notes are locked with.": 'Hindi iyan ang password na ginamit sa pag-lock ng iyong mga tala.',
     'Trial mode keeps notes in this browser only.': 'Sa browser na ito lang nakatago ang mga tala sa trial mode.',
     'Too many notes in 24 hours. Try again later.': 'Masyadong maraming tala sa loob ng 24 oras. Subukan ulit mamaya.',
+    // your name (src/lib/names.ts, 20261122000003_real_names.sql)
+    'Write your name, up to 40 letters.': 'Isulat ang iyong pangalan, hanggang 40 titik.',
+    'Changing your name needs the latest database update (supabase/migrations/20261122000003_real_names.sql) — ask the admin to run it.':
+      'Kailangan ng pinakabagong database update (supabase/migrations/20261122000003_real_names.sql) para mapalitan ang iyong pangalan — pakisabi sa admin na patakbuhin ito.',
     // pinned notes (src/lib/backend.ts, 20261122000000_shared_notes.sql)
     'Pinning a note needs the latest database update (supabase/migrations/20261122000000_shared_notes.sql) — ask the admin to run it.':
       'Kailangan ng pinakabagong database update (supabase/migrations/20261122000000_shared_notes.sql) para makapag-pin ng tala — pakisabi sa admin na patakbuhin ito.',

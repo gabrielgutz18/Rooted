@@ -196,6 +196,15 @@ Because notes are encrypted, pinning saves a separate **readable copy** of that 
 the others. Needs `supabase/migrations/20261122000000_shared_notes.sql`; until it is run the app
 works as before and pinning asks for that update.
 
+## Your name
+
+A new account's name is its username. In Menu → My profile → **Your name**, a member can put
+their real name (up to 40 letters, e.g. "Juan Dela Cruz"): it shows in the menu, on their profile
+and in their friends' lists. They still sign in with their username, which friends can see on
+their profile, and changing the username later keeps the real name. Needs
+`supabase/migrations/20261122000003_real_names.sql`; until it is run, saving a name asks for that
+update.
+
 ## Privacy
 
 Notes are **end-to-end encrypted**. They are locked in the browser before they are sent,

@@ -346,6 +346,13 @@ function Garden({ userId, hidden }: { userId: string; hidden: boolean }) {
     setPeople((list) => list.map((p) => (p.id === userId ? change(p) : p)));
     setNotice(t.usernameSaved(username));
   }
+  /** Your name changed (Menu → My profile → Your name): it shows everywhere straight away. */
+  function nameChanged(name: string) {
+    const change = (p: Profile) => ({ ...p, display_name: name });
+    setMe((m) => (m ? change(m) : m));
+    setPeople((list) => list.map((p) => (p.id === userId ? change(p) : p)));
+    setNotice(t.nameSaved(name));
+  }
   const closeProfile = useCallback(() => setProfileOf(null), []);
   // on a phone the menu closes over the page; it opens again on the links, not the profile
   const closeMenu = () => {
@@ -527,6 +534,7 @@ function Garden({ userId, hidden }: { userId: string; hidden: boolean }) {
             notes={open ? entries.length : me.entry_count}
             streak={myStreak}
             onUsername={namePicked}
+            onName={nameChanged}
             onChangeTree={() => {
               closeMenu();
               setPicking(true);

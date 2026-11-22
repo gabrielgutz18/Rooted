@@ -1,7 +1,8 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
 import { backend, type Entry, type Profile, type SharedNote } from '../lib/backend';
 import { stageFor } from '../lib/growth';
-import { useT } from '../lib/i18n';
+import { errorText, useT } from '../lib/i18n';
+import { BAD_NAME, NAME_MAX, cleanName } from '../lib/names';
 import { speciesOf } from '../scene/species';
 import { UsernameForm } from './UsernameDialog';
 import { Avatar } from './Avatar';
@@ -10,8 +11,8 @@ import { AVATAR_IDS, BACKDROP_IDS, avatarValue, backdropOf, parseAvatar, type Av
 
 /**
  * A profile, shown inside the side menu in place of the links.
- *  - yours (Menu → My profile): also how you sign in; change your username like a handle,
- *    or (older email accounts) add one; change your tree.
+ *  - yours (Menu → My profile): also how you sign in; put your real name (the one friends
+ *    see); change your username like a handle, or (older email accounts) add one; change your tree.
  *  - a friend's (View profile, while visiting their tree): who they are and how their tree
  *    is growing. Never their notes (only the one they pinned to share), and nothing about
  *    how they sign in.
@@ -23,6 +24,7 @@ export default function ProfilePanel({
   notes,
   streak,
   onUsername,
+  onName,
   onChangeTree,
   onAvatar,
   share,
@@ -37,6 +39,8 @@ export default function ProfilePanel({
   /** undefined while a friend's days are loading */
   streak: number | undefined;
   onUsername?(username: string, displayName?: string): void;
+  /** Your name was saved (as `name`). */
+  onName?(name: string): void;
   onChangeTree?(): void;
   /** Your profile icon was chosen (null: none). */
   onAvatar?(avatar: string | null): void;
@@ -59,6 +63,7 @@ export default function ProfilePanel({
   const [email, setEmail] = useState<string | null>(null);
   const [changing, setChanging] = useState(false);
   const [picking, setPicking] = useState(false);
+  const [naming, setNaming] = useState(false);
   const grid = useRef<HTMLDivElement>(null);
   const choice = parseAvatar(me.avatar);
   const shownBg = backdropOf(choice);
@@ -101,6 +106,8 @@ export default function ProfilePanel({
   const canAddName = mine && !!onUsername && me.username === null && !me.is_admin;
   const canChangeName = mine && !!onUsername && !!me.username && !me.is_admin;
   const tree = t.species[speciesOf(me.tree).id].name;
+  // a name that's still just the username, as it was when the account was made
+  const nameIsUsername = !!me.username && me.display_name.trim().toLowerCase() === me.username;
 
   return (
     <section className="side-profile" aria-labelledby="profile-title">
@@ -122,6 +129,23 @@ export default function ProfilePanel({
           </p>
         </div>
       </div>
+
+      {mine && onName && naming && (
+        <section id="name-form" className="profile-add" aria-labelledby="name-form-title">
+          <h3 id="name-form-title" className="side-title">
+            {t.nameChange}
+          </h3>
+          <p className="muted small">{t.nameIntro(me.username ?? null)}</p>
+          <NameForm
+            current={nameIsUsername ? '' : me.display_name}
+            onCancel={() => setNaming(false)}
+            onDone={(name) => {
+              setNaming(false);
+              onName(name);
+            }}
+          />
+        </section>
+      )}
 
       {mine && onAvatar && picking && (
         <section id="icon-picker" className="profile-add" aria-labelledby="icon-picker-title">
@@ -198,6 +222,20 @@ export default function ProfilePanel({
       </div>
 
       <dl className="profile-facts">
+        {mine && onName && (
+          <div>
+            <dt>{t.nameTitle}</dt>
+            <dd className="profile-row">
+              <span>
+                {me.display_name}
+                {nameIsUsername && <span className="muted small"> · {t.nameSameAsUsername}</span>}
+              </span>
+              <button className="btn btn-small" onClick={() => setNaming((n) => !n)} aria-expanded={naming} aria-controls="name-form" aria-label={t.nameChange}>
+                {naming ? t.close : t.changeTree}
+              </button>
+            </dd>
+          </div>
+        )}
         {(mine ? me.username !== undefined : !!me.username) && (
           <div>
             <dt>{t.username}</dt>
@@ -286,5 +324,71 @@ export default function ProfilePanel({
         </section>
       )}
     </section>
+  );
+}
+
+const message = (err: unknown) =>
+  err && typeof err === 'object' && 'message' in err ? String((err as { message: unknown }).message) : 'Something went wrong.';
+
+/** Your name: typed in, tidied (src/lib/names.ts) and saved. */
+function NameForm({ current, onDone, onCancel }: { current: string; onDone(name: string): void; onCancel(): void }) {
+  const t = useT();
+  const [name, setName] = useState(current);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const input = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    input.current?.focus();
+    input.current?.select();
+  }, []);
+
+  async function save(e: FormEvent) {
+    e.preventDefault();
+    const clean = cleanName(name);
+    if (!clean) return setError(BAD_NAME);
+    if (clean === current) return onCancel(); // nothing changed
+    setBusy(true);
+    setError(null);
+    try {
+      onDone(await backend.setName(clean));
+    } catch (err) {
+      setError(message(err));
+      setBusy(false);
+    }
+  }
+
+  return (
+    <form className="stack" onSubmit={save} noValidate>
+      <label className="field">
+        <span className="field-label">{t.nameLabel}</span>
+        <input
+          ref={input}
+          type="text"
+          maxLength={NAME_MAX}
+          autoComplete="name"
+          autoCapitalize="words"
+          placeholder={t.namePlaceholder}
+          value={name}
+          onChange={(e) => {
+            setName(e.target.value);
+            setError(null);
+          }}
+        />
+      </label>
+      {error && (
+        <p className="form-error" role="alert">
+          {errorText(t, error)}
+        </p>
+      )}
+      <div className="composer-foot">
+        <button type="button" className="btn" onClick={onCancel}>
+          {t.cancel}
+        </button>
+        <button className="btn btn-primary" disabled={busy}>
+          {busy ? t.pleaseWait : t.nameSave}
+        </button>
+      </div>
+    </form>
   );
 }
