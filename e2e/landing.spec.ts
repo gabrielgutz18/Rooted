@@ -158,6 +158,21 @@ test('in Tagalog', async ({ page }) => {
   await page.screenshot({ path: `${SHOTS}/desktop-tagalog.png`, fullPage: true });
 });
 
+test('the hero can grow the newest tree, a coconut palm by the sea, clear of the card', async ({ page }) => {
+  test.setTimeout(60_000); // it grows twice: on a computer, then on a phone
+  await page.goto('/?tree=coconut&hour=12');
+  await expect(page.locator('.landing-stage')).toHaveText('Growing · Grown Tree', { timeout: 15000 });
+  await page.waitForTimeout(2500);
+  await page.screenshot({ path: `${SHOTS}/desktop-hero-coconut.png` });
+
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.reload();
+  await expect(page.locator('.landing-stage')).toHaveText('Growing · Grown Tree', { timeout: 15000 });
+  await page.waitForTimeout(2500);
+  expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390);
+  await page.screenshot({ path: `${SHOTS}/phone-hero-coconut.png` });
+});
+
 test.describe('on a phone', () => {
   test.use({ viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true });
 

@@ -20,6 +20,8 @@ import hour07 from '../assets/landing/hour-07.png';
 import hour13 from '../assets/landing/hour-13.png';
 import hour18 from '../assets/landing/hour-18.png';
 import hour22 from '../assets/landing/hour-22.png';
+// from e2e/visit.spec.ts (2-hand-on-the-tree.png, cropped to Jesus and the tree)
+import visit from '../assets/landing/visit.png';
 
 interface Row {
   title: string;
@@ -45,6 +47,11 @@ const COPY = {
       body: 'Every note adds up. Your tree grows through seven stages, from a seed to an ancient tree, and birds, squirrels and deer move in along the way.',
       alt: 'The same sakura tree as a sprout, a sapling and a grown tree.',
     },
+    visit: {
+      title: 'A surprise visit from Jesus',
+      body: 'Now and then, at a time you won’t know ahead, Jesus comes to your tree. He walks about and rests His hand on it, even when it’s just a seed. The note you write while He’s there grows your tree 3×.',
+      alt: 'Jesus in a white robe and red sash, with His hand on an oak tree at sunset.',
+    },
     lamp: {
       title: 'A lamp for your daily streak',
       body: 'Write each day and the flame changes colour: ember, gold, emerald, sky and beyond. Miss a few days and the leaves start to fall. One note brings them back.',
@@ -62,7 +69,7 @@ const COPY = {
     },
     trees: (n: number): Row => ({
       title: `${n} trees from around the world`,
-      body: 'Oak, sakura, jacaranda, baobab and more, each standing in the land it comes from. Change it any time and your growth stays the same.',
+      body: 'Oak, sakura, jacaranda, baobab, the new coconut palm by the sea and more, each standing in the land it comes from. Change it any time and your growth stays the same.',
       alt: 'The tree picker: oak, sakura, maple, apple, birch, willow, pine, jacaranda, rainbow eucalyptus and socotra, each in its own land.',
     }),
     dayTitle: 'Morning to night',
@@ -86,6 +93,11 @@ const COPY = {
       body: 'Nadaragdag ang bawat tala. Dumaraan ang iyong puno sa pitong yugto, mula binhi hanggang matandang puno, at dumarating ang mga ibon, ardilya at usa habang lumalago ito.',
       alt: 'Ang iisang punong sakura bilang usbong, batang puno at ganap na puno.',
     },
+    visit: {
+      title: 'Isang sorpresang pagdalaw ni Hesus',
+      body: 'Paminsan-minsan, sa oras na hindi mo alam, dumarating si Hesus sa iyong puno. Naglalakad Siya sa paligid at ipinapatong ang Kanyang kamay dito, kahit binhi pa lang ito. 3× ang ipapalago sa iyong puno ng talang isusulat mo habang narito Siya.',
+      alt: 'Si Hesus na nakaputing damit at pulang banda, nakahawak sa isang punong roble sa paglubog ng araw.',
+    },
     lamp: {
       title: 'Ilawan para sa sunod-sunod mong araw',
       body: 'Sumulat araw-araw at nagbabago ang kulay ng apoy: baga, ginto, esmeralda, langit at higit pa. Lumiban nang ilang araw at magsisimulang malaglag ang mga dahon. Isang tala lang, babalik ang mga ito.',
@@ -103,7 +115,7 @@ const COPY = {
     },
     trees: (n: number): Row => ({
       title: `${n} puno mula sa iba’t ibang panig ng mundo`,
-      body: 'Oak, sakura, jacaranda, baobab at iba pa, bawat isa ay nakatayo sa lupaing pinagmulan nito. Palitan ito anumang oras at mananatili ang iyong paglago.',
+      body: 'Oak, sakura, jacaranda, baobab, ang bagong niyog sa tabing-dagat at iba pa, bawat isa ay nakatayo sa lupaing pinagmulan nito. Palitan ito anumang oras at mananatili ang iyong paglago.',
       alt: 'Ang pagpili ng puno: oak, sakura, maple, apple, birch, willow, pine, jacaranda, rainbow eucalyptus at socotra, bawat isa sa sariling lupain.',
     }),
     dayTitle: 'Mula umaga hanggang gabi',
@@ -184,6 +196,9 @@ export default function LandingShowcase() {
                 </div>
               ))}
             </div>
+          </TourRow>
+          <TourRow row={c.visit} kind="visit">
+            <Shot className="show-framed" src={visit} alt={c.visit.alt} w={600} h={442} />
           </TourRow>
           <TourRow row={c.lamp} kind="lamp">
             <Shot className="show-framed" src={lamp} alt={c.lamp.alt} w={340} h={552} />

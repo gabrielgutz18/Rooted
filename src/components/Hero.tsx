@@ -1,4 +1,4 @@
-import { useEffect, useImperativeHandle, useRef, useState, type CSSProperties, type Ref } from 'react';
+import { useCallback, useEffect, useImperativeHandle, useRef, useState, type CSSProperties, type Ref } from 'react';
 import { Scene, type FreeArea, type Period } from '../scene/engine';
 import { stageFor, VERSES } from '../lib/growth';
 import { useT } from '../lib/i18n';
@@ -6,6 +6,8 @@ import { barenessFor, flameIndex } from '../lib/streak';
 import StreakLamp, { type LampFire } from './StreakLamp';
 import LampPost from './LampPost';
 import { fireColors } from './lantern';
+import Visitor, { VisitChip, type ChipKind } from './Visitor';
+import { VISIT_MULTIPLIER } from '../lib/visit';
 
 // Whether you've hidden the streak card in the corner (the lamp post stays). Per browser.
 const CARD_KEY = 'rooted.streakCard';
@@ -50,9 +52,10 @@ function freeAreaIn(box: HTMLElement): FreeArea {
 export interface HeroHandle {
   /**
    * stage: the stage just reached, if any; arrivals: the stages whose animals just moved in;
-   * streakFrom: the streak before this note, when the note made it longer.
+   * streakFrom: the streak before this note, when the note made it longer;
+   * blessed: the note was written while Jesus was visiting (its points are already ×3).
    */
-  celebrate(o: { points: number; stage?: number; arrivals?: number[]; streakFrom?: number }): void;
+  celebrate(o: { points: number; stage?: number; arrivals?: number[]; streakFrom?: number; blessed?: boolean }): void;
   sparkle(): void;
 }
 
@@ -67,12 +70,14 @@ interface Props {
   todayDone: boolean;
   /** Whole days since the last note (null: never wrote one). The leaves fall after a while. */
   idle: number | null;
+  /** Jesus is visiting this tree: the visit's start time (src/lib/visit.ts), or null. */
+  visit?: number | null;
   onBack?: () => void;
   onPeriod(p: Period): void;
   ref?: Ref<HeroHandle>;
 }
 
-export default function Hero({ points, seed, species, hour, owner, streak, todayDone, idle, onBack, onPeriod, ref }: Props) {
+export default function Hero({ points, seed, species, hour, owner, streak, todayDone, idle, visit = null, onBack, onPeriod, ref }: Props) {
   const t = useT();
   const boxRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -80,7 +85,9 @@ export default function Hero({ points, seed, species, hour, owner, streak, today
   const uid = useRef(0);
   const verseIdx = useRef(Math.floor(Math.random() * VERSES.length));
   const [period, setPeriod] = useState<Period>('day');
-  const [floaters, setFloaters] = useState<{ id: number; text: string }[]>([]);
+  const [floaters, setFloaters] = useState<{ id: number; text: string; blessed?: boolean }[]>([]);
+  const [blessings, setBlessings] = useState(0); // notes blessed while Jesus visited
+  const [visitChip, setVisitChip] = useState<ChipKind | null>(null); // said in the corner while He's here
   // Kept as numbers so they show in whichever language is chosen.
   const [banner, setBanner] = useState<{ key: number; stage: number; arrivals: number[] } | null>(null);
   const [verse, setVerse] = useState<{ key: number; index: number } | null>(null);
@@ -129,14 +136,15 @@ export default function Hero({ points, seed, species, hour, owner, streak, today
   }, [cardHidden, owner, streak]);
 
   useImperativeHandle(ref, () => ({
-    celebrate({ points: p, stage, arrivals, streakFrom }) {
-      scene.current?.burst(stage != null ? 80 : 30);
+    celebrate({ points: p, stage, arrivals, streakFrom, blessed }) {
+      scene.current?.burst(stage != null || blessed ? 80 : 30);
+      if (blessed) setBlessings((n) => n + 1);
       const id = ++uid.current;
       if (streakFrom != null) {
         setFire({ key: id, from: streakFrom });
         setTimeout(() => setFire((f) => (f?.key === id ? null : f)), 4500); // don't replay it when the lamp remounts
       }
-      setFloaters((f) => [...f, { id, text: `+${p}` }]);
+      setFloaters((f) => [...f, { id, text: `+${p}`, blessed }]);
       setTimeout(() => setFloaters((f) => f.filter((x) => x.id !== id)), 1800);
       if (stage != null) {
         setBanner({ key: id, stage, arrivals: arrivals ?? [] });
@@ -162,6 +170,8 @@ export default function Hero({ points, seed, species, hour, owner, streak, today
 
   const info = stageFor(points);
   const shown = verse && t.verses[verse.index];
+  const trunk = useCallback(() => scene.current?.trunk() ?? null, []);
+  const lightFlows = useCallback(() => scene.current?.burst(5), []);
 
   return (
     <section
@@ -184,6 +194,9 @@ export default function Hero({ points, seed, species, hour, owner, streak, today
         }}
       />
 
+      {/* Jesus visiting, His hand on the trunk (only on your own tree); the cards stay over Him */}
+      <Visitor visit={owner ? null : visit} blessed={blessings} trunk={trunk} onTouch={lightFlows} onChip={setVisitChip} />
+
       <div className="hero-top">
         {owner ? (
           <div className="hero-chip">
@@ -192,6 +205,8 @@ export default function Hero({ points, seed, species, hour, owner, streak, today
             </button>
             <span>{t.visiting(owner)}</span>
           </div>
+        ) : visitChip ? (
+          <VisitChip kind={visitChip} />
         ) : (
           <div className="hero-chip">{t.greeting[period]}</div>
         )}
@@ -238,8 +253,9 @@ export default function Hero({ points, seed, species, hour, owner, streak, today
         ))}
 
       {floaters.map((f) => (
-        <div key={f.id} className="float-points">
+        <div key={f.id} className={`float-points ${f.blessed ? 'is-blessed' : ''}`}>
           {f.text}
+          {f.blessed && <small>×{VISIT_MULTIPLIER}</small>}
         </div>
       ))}
       {banner && (

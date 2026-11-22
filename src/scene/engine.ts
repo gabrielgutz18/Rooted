@@ -123,6 +123,18 @@ export interface SceneOptions {
   tight: boolean; // frame the tree closely (for small previews)
 }
 
+/**
+ * The trunk in CSS px: x from the left, r its half-width just above the flared foot, height of
+ * the whole tree; left and right: the stretch of ground clear of the cards and the lamp post.
+ */
+export interface Trunk {
+  x: number;
+  r: number;
+  height: number;
+  left: number;
+  right: number;
+}
+
 /** The part of the view the tree may fill, clear of the cards and the lamp post (CSS px from the top-left). */
 export interface FreeArea {
   left: number;
@@ -203,6 +215,12 @@ export class Scene {
   onPeriod?: (p: Period) => void;
   private period: Period | null = null;
   private clumps: ClumpAt[] = [];
+  private trunkNow: Trunk | null = null;
+
+  /** Where the trunk stands and how thick it is, last frame (CSS px), for things that stand beside it. */
+  trunk(): Trunk | null {
+    return this.trunkNow;
+  }
 
   constructor(private canvas: HTMLCanvasElement, state: SceneState, opts: Partial<SceneOptions> = {}) {
     this.ctx = canvas.getContext('2d')!;
@@ -552,6 +570,9 @@ export class Scene {
     const keyBase = `${sp.id}|${period}|${lxq}|${dry}`;
     const wood = this.woodRamp(sp, period, pal, g);
     const rf = clamp(0.4 + g * 4, 0.4, 1) * z; // seedlings get thinner stems
+    const css = step / dpr; // CSS pixels per art pixel
+    const onlySeed = this.state.points <= 0 && g < 0.002; // just the seed in the ground
+    this.trunkNow = { x: cx * css, r: (tree.nodes[0]?.r0 ?? 0) * rf * css, height: onlySeed ? 0 : this.treeH * css, left: freeL * css, right: freeR * css };
     const limbs = (pass: 0 | 1) => {
       const r0 = (tree.nodes[0]?.r0 ?? 0) * rf;
       if (r0 > 2 && !palm) {

@@ -25,6 +25,8 @@ import Developer from './pages/developer';
 import { navigate, usePage } from './lib/route';
 import { clearSnapshots, readSnapshot, writeSnapshot } from './lib/cache';
 import { addToOutbox, asEntry, clearOutbox, editInOutbox, isOffline, readOutbox, removeFromOutbox, withPending, withTimeout } from './lib/outbox';
+import { previewVisit, useVisit, VISIT_MULTIPLIER } from './lib/visit';
+import { useVisitText } from './components/Visitor';
 
 const cloud = backend.mode === 'cloud';
 
@@ -34,6 +36,8 @@ const hourParam = (() => {
   return location.search.includes('hour=') && h >= 0 && h < 24 ? h : undefined;
 })();
 const treeParam = new URLSearchParams(location.search).get('tree') ?? undefined;
+// ?visit=now: Jesus visits when the page opens (trial mode only; see src/lib/visit.ts)
+const visitPreview = previewVisit(!cloud);
 
 const message = (err: unknown) =>
   err && typeof err === 'object' && 'message' in err ? String((err as { message: unknown }).message) : 'Something went wrong.';
@@ -356,12 +360,18 @@ function Garden({ userId, hidden }: { userId: string; hidden: boolean }) {
   const friends = useMemo(() => people.filter((p) => p.id !== userId), [people, userId]);
   const myStreak = useMemo(() => dayStreak(myDays), [myDays]);
   const today = dayKey(new Date());
+  // Jesus visiting your tree: the note written now grows it 3× (needs the notes, to know if
+  // one was already written during this visit)
+  const visit = useVisit(userId, entries, open, !cloud, visitPreview);
+  const vt = useVisitText();
 
   const setPeriod = useCallback((p: Period) => {
     document.documentElement.dataset.period = p;
   }, []);
 
   async function save(input: EntryInput) {
+    const blessed = !!visit;
+    if (blessed) input = { ...input, points: input.points * VISIT_MULTIPLIER };
     const before = stageFor(points).index;
     const streakBefore = myStreak;
     const id = crypto.randomUUID();
@@ -380,6 +390,8 @@ function Garden({ userId, hidden }: { userId: string; hidden: boolean }) {
       setNotice(t.offlineKept);
     }
     setEntries((list) => [created, ...list]);
+    // the database hasn't had the update that lets a note carry 3× yet: saved with less
+    if (blessed && created.points < input.points) setNotice(vt.capped);
     const after = stageFor(points + created.points).index;
     const streakAfter = dayStreak(dayStats([created, ...entries]));
     hero.current?.celebrate({
@@ -387,6 +399,7 @@ function Garden({ userId, hidden }: { userId: string; hidden: boolean }) {
       streakFrom: streakAfter > streakBefore ? streakBefore : undefined,
       stage: after > before ? after : undefined,
       arrivals: ARRIVALS.filter((a) => a.stage > before && a.stage <= after).map((a) => a.stage),
+      blessed,
     });
     window.scrollTo({ top: 0, behavior: 'smooth' });
     if (!created.pending) loadPeople().catch(() => {});
@@ -621,6 +634,7 @@ function Garden({ userId, hidden }: { userId: string; hidden: boolean }) {
           streak={shownStreak}
           todayDone={lastDay === today}
           idle={daysIdle(lastDay)}
+          visit={visit?.start ?? null}
           onBack={() => go({ kind: 'home' })}
           onPeriod={setPeriod}
         />
@@ -645,7 +659,7 @@ function Garden({ userId, hidden }: { userId: string; hidden: boolean }) {
 
           {view.kind === 'home' && (
             <>
-              {lock && !lock.open ? <UnlockPanel hasKey={lock.hasKey} problem={lock.problem} onOpen={unlocked} /> : <Composer entries={entries} onSave={save} />}
+              {lock && !lock.open ? <UnlockPanel hasKey={lock.hasKey} problem={lock.problem} onOpen={unlocked} /> : <Composer entries={entries} bonus={visit ? VISIT_MULTIPLIER : 1} onSave={save} />}
               <section className="px-panel" aria-labelledby="track-title">
                 <div className="composer-head">
                   <h2 id="track-title" className="panel-title">

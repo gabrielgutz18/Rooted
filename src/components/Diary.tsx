@@ -3,6 +3,7 @@ import { analyze, type Part } from '../lib/analyze';
 import { errorText, tagName, useT, type Strings } from '../lib/i18n';
 import { backend, type Entry, type EntryEdit, type EntryInput } from '../lib/backend';
 import { checkNote, noteLimit, NOTES_PER_DAY, type LimitIssue, type NoteIssue } from '../lib/spam';
+import { BlessedTag } from './Visitor';
 
 const partLabel = (t: Strings, p: Part) =>
   p.kind === 'show'
@@ -39,9 +40,10 @@ function problemText(t: Strings, p: Problem): string {
 
 /**
  * Subject + note. The date and time are recorded automatically when you save.
- * `entries` (saved and waiting) are what the spam limits count.
+ * `entries` (saved and waiting) are what the spam limits count. `bonus`: Jesus is visiting, and
+ * the note will grow the tree this many times over (the app multiplies the points when it saves).
  */
-export function Composer({ entries, onSave }: { entries: Entry[]; onSave(input: EntryInput): Promise<void> }) {
+export function Composer({ entries, bonus = 1, onSave }: { entries: Entry[]; bonus?: number; onSave(input: EntryInput): Promise<void> }) {
   const t = useT();
   const [subject, setSubject] = useState('');
   const [note, setNote] = useState('');
@@ -127,7 +129,8 @@ export function Composer({ entries, onSave }: { entries: Entry[]; onSave(input: 
       </label>
 
       <div className="analysis" aria-live="polite">
-        <strong className="analysis-points">{t.plusGrowth(result.points)}</strong>
+        <strong className="analysis-points">{t.plusGrowth(result.points * bonus)}</strong>
+        {bonus > 1 && <BlessedTag points={result.points} />}
         {result.parts.length === 0 ? (
           <span className="muted">{t.startWriting}</span>
         ) : (

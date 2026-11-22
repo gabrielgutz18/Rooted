@@ -39,6 +39,12 @@ import lampPostNight from '../assets/updates/lamp-post-night.png';
 import streakCardHidden from '../assets/updates/streak-card-hidden.png';
 import profileIcons from '../assets/updates/profile-icons.png';
 import pinnedNote from '../assets/updates/pinned-note.png';
+import jesusVisit from '../assets/updates/jesus-visit.png';
+import jesusTouchClose from '../assets/updates/jesus-touch-close.png';
+import jesusSeedClose from '../assets/updates/jesus-seed-close.png';
+import jesusPalmClose from '../assets/updates/jesus-palm-close.png';
+import jesusNote3x from '../assets/updates/jesus-note-3x.png';
+import landCoconut from '../assets/updates/land-coconut.png';
 
 type Text = Record<Lang, string>;
 
@@ -69,6 +75,90 @@ const days = (n: number): Text => ({ en: `${n} ${n === 1 ? 'day' : 'days'}`, tl:
 const cap = (s: string) => s[0].toUpperCase() + s.slice(1);
 
 export const UPDATES: Update[] = [
+  {
+    id: '2026-11-22-jesus-visits',
+    date: '2026-11-22',
+    title: { en: 'Jesus visits your tree', tl: 'Dinadalaw ni Hesus ang iyong puno' },
+    intro: {
+      en: 'Every now and then, Jesus comes to visit your tree, and the note you write while He’s there grows your tree 3×. There’s also a new tree: the coconut palm.',
+      tl: 'Paminsan-minsan, dumadalaw si Hesus sa iyong puno, at 3× ang ipapalago sa iyong puno ng talang isusulat mo habang narito Siya. May bago ring puno: ang niyog.',
+    },
+    sections: [
+      {
+        heading: { en: 'A surprise visit', tl: 'Isang sorpresang pagdalaw' },
+        text: {
+          en: 'You won’t know when He’s coming: on some days, at a different time each day, Jesus walks up to your tree and stays for a while. A small sign in the top corner tells you He’s there, so nothing covers your tree.',
+          tl: 'Hindi mo malalaman kung kailan Siya darating: sa ilang araw, sa ibang oras bawat araw, lalapit si Hesus sa iyong puno at mananatili nang ilang sandali. May maliit na karatula sa itaas na sulok na nagsasabing narito Siya, kaya walang nakatakip sa iyong puno.',
+        },
+        pictures: [
+          {
+            src: jesusVisit,
+            alt: {
+              en: 'Jesus in a white robe and red sash, with His hand on an oak tree at sunset, and “Jesus is visiting · notes grow 3×” in the corner',
+              tl: 'Si Hesus na nakaputing damit at pulang banda, nakahawak sa isang punong roble sa paglubog ng araw, at “Narito si Hesus · 3× ang paglago” sa sulok',
+            },
+          },
+        ],
+      },
+      {
+        heading: { en: 'Your next note grows 3×', tl: '3× ang paglago ng susunod mong tala' },
+        text: {
+          en: 'Write a note while He’s visiting and it gives your tree three times the growth. Today’s note shows it as you write. Jesus blesses that note, then goes on His way. Your note stays locked so only you can read it: only its growth is tripled.',
+          tl: 'Sumulat ng tala habang dumadalaw Siya at tatlong beses ang ipapalago nito sa iyong puno. Makikita mo ito sa Tala ngayong araw habang sumusulat ka. Pagpapalain ni Hesus ang talang iyon, saka Siya magpapatuloy sa Kanyang lakad. Nananatiling naka-lock ang iyong tala kaya ikaw lang ang makakabasa: ang paglago lang nito ang tinatriple.',
+        },
+        pictures: [
+          {
+            src: jesusNote3x,
+            alt: {
+              en: 'Today’s note with “Jesus is visiting · 3× growth +37 × 3” among the reasons, for +111 growth',
+              tl: 'Ang Tala ngayong araw na may “Narito si Hesus · 3× na paglago +37 × 3” sa mga dahilan, para sa +111 na paglago',
+            },
+          },
+        ],
+      },
+      {
+        heading: { en: 'He walks about and touches your tree', tl: 'Naglalakad Siya at hinahawakan ang iyong puno' },
+        text: {
+          en: 'While He’s there, Jesus walks around your tree, stops to look at it, and rests His hand on the trunk as light flows into it. He comes even when your tree is just a seed, and kneels down beside it. Tap Him and He waves. He only visits your own tree, not the trees you visit.',
+          tl: 'Habang narito Siya, naglalakad si Hesus sa paligid ng iyong puno, humihinto para tingnan ito, at ipinapatong ang Kanyang kamay sa katawan nito habang dumadaloy ang liwanag dito. Dumarating Siya kahit binhi pa lang ang iyong puno, at yumuyuko sa tabi nito. I-tap Siya at kakaway Siya. Sa sarili mong puno lang Siya dumadalaw, hindi sa mga punong binibisita mo.',
+        },
+        row: true,
+        pictures: [
+          {
+            src: jesusTouchClose,
+            label: { en: 'At an oak', tl: 'Sa roble' },
+            alt: { en: 'Close up: Jesus with His hand on an oak’s trunk, light flowing in', tl: 'Malapitan: si Hesus na nakahawak sa katawan ng roble, dumadaloy ang liwanag' },
+          },
+          {
+            src: jesusSeedClose,
+            label: { en: 'Beside a seed', tl: 'Sa tabi ng binhi' },
+            alt: { en: 'Close up: Jesus kneeling down to a seed just planted', tl: 'Malapitan: si Hesus na yumuyuko sa binhing katatanim lang' },
+          },
+          {
+            src: jesusPalmClose,
+            label: { en: 'At a coconut palm', tl: 'Sa niyog' },
+            alt: { en: 'Close up: Jesus with His hand on a coconut palm on the beach', tl: 'Malapitan: si Hesus na nakahawak sa isang niyog sa tabing-dagat' },
+          },
+        ],
+      },
+      {
+        heading: { en: 'A new tree: the coconut palm', tl: 'Bagong puno: ang niyog' },
+        text: {
+          en: 'The coconut palm grows on a tropical beach: its fronds sway over the sand, coconuts hang under its crown, the sea runs out to an island, a bangka rests by the shore and crabs walk past. Choose it from the menu (Choose tree) — your growth stays the same.',
+          tl: 'Sa isang tabing-dagat sa tropiko tumutubo ang niyog: umiindayog ang mga palapa nito sa ibabaw ng buhangin, nakabitin ang mga bunga sa ilalim ng korona nito, umaabot ang dagat hanggang sa isang pulo, may bangka sa may pampang at may mga alimangong dumaraan. Piliin ito sa menu (Pumili ng puno) — mananatili ang iyong paglago.',
+        },
+        pictures: [
+          {
+            src: landCoconut,
+            alt: {
+              en: 'A grown coconut palm on a sandy beach at noon, with the sea, an island, a bangka and crabs',
+              tl: 'Isang malaking puno ng niyog sa mabuhanging tabing-dagat sa tanghali, may dagat, pulo, bangka at mga alimango',
+            },
+          },
+        ],
+      },
+    ],
+  },
   {
     id: '2026-11-22-icon-fix',
     date: '2026-11-22',

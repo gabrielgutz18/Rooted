@@ -22,6 +22,12 @@ test('the update notice opens as a scroll, with pictures, and stops saying New o
   await link.click();
   const scroll = page.getByRole('dialog', { name: 'What’s new in Rooted' });
   await expect(scroll).toBeVisible();
+  // the newest: Jesus visiting your tree, and the coconut palm
+  await expect(scroll.getByRole('heading', { name: 'Jesus visits your tree', exact: true })).toBeVisible();
+  await expect(scroll.getByRole('heading', { name: 'Your next note grows 3×' })).toBeVisible();
+  await expect(scroll.getByRole('heading', { name: 'A new tree: the coconut palm' })).toBeVisible();
+  const visits = scroll.locator('.scroll-section', { has: page.getByRole('heading', { name: 'He walks about and touches your tree' }) });
+  await expect(visits.locator('figcaption')).toHaveText(['At an oak', 'Beside a seed', 'At a coconut palm']);
   await expect(scroll.getByRole('heading', { name: 'Twelve new trees', exact: true })).toBeVisible();
   await expect(scroll.getByRole('heading', { name: 'Lamp posts', exact: true })).toBeVisible();
   await expect(scroll.getByRole('heading', { name: 'Hide the streak card' })).toBeVisible();
@@ -30,7 +36,7 @@ test('the update notice opens as a scroll, with pictures, and stops saying New o
 
   // every screenshot actually loads
   const imgs = scroll.locator('img');
-  expect(await imgs.count()).toBeGreaterThanOrEqual(32);
+  expect(await imgs.count()).toBeGreaterThanOrEqual(38);
   for (const img of await imgs.all()) {
     await img.scrollIntoViewIfNeeded();
     await expect.poll(() => img.evaluate((el: HTMLImageElement) => el.complete && el.naturalWidth)).toBeGreaterThan(0);
@@ -38,6 +44,12 @@ test('the update notice opens as a scroll, with pictures, and stops saying New o
   await scroll.locator('.scroll-paper').evaluate((el) => el.scrollTo(0, 0));
   await page.waitForTimeout(300);
   await page.screenshot({ path: `${SHOTS}/1-scroll-top.png` });
+  await visits.scrollIntoViewIfNeeded();
+  await page.waitForTimeout(300);
+  await page.screenshot({ path: `${SHOTS}/1b-scroll-jesus-visits.png` });
+  await scroll.getByRole('img', { name: /^A grown coconut palm on a sandy beach/ }).scrollIntoViewIfNeeded();
+  await page.waitForTimeout(300);
+  await page.screenshot({ path: `${SHOTS}/1c-scroll-coconut-palm.png` });
   await scroll.getByRole('heading', { name: 'Seven flames to reach' }).scrollIntoViewIfNeeded();
   await page.screenshot({ path: `${SHOTS}/2-scroll-flames.png` });
 
@@ -89,6 +101,9 @@ test('the notice reads in Tagalog too', async ({ page }) => {
   await open(page, 'Trial mode · sa browser na ito lang');
   await page.getByRole('button', { name: /^Mga update/ }).click();
   const scroll = page.getByRole('dialog', { name: 'Ano ang bago sa Rooted' });
+  await expect(scroll.getByRole('heading', { name: 'Dinadalaw ni Hesus ang iyong puno', exact: true })).toBeVisible();
+  await expect(scroll.getByRole('heading', { name: 'Bagong puno: ang niyog' })).toBeVisible();
+  await expect(scroll).not.toContainText(/Juan 14|sumainyo/); // no Bible verse in the notice
   await expect(scroll.getByRole('heading', { name: 'Mga poste ng ilawan', exact: true })).toBeVisible();
   await expect(scroll.getByRole('heading', { name: 'Pindutin ang ilawan' })).toBeVisible();
 });

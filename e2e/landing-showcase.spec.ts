@@ -18,7 +18,7 @@ test.beforeEach(({ page }) => {
 /** Scroll each picture into view (they load lazily), then check they all loaded. */
 async function expectPicturesLoaded(page: Page) {
   const imgs = page.locator('.show img');
-  await expect(imgs).toHaveCount(14); // 2 devices, 8 in the closer look (3 of them the stages), 4 hours
+  await expect(imgs).toHaveCount(15); // 2 devices, 9 in the closer look (3 of them the stages), 4 hours
   for (const img of await imgs.all()) {
     await img.scrollIntoViewIfNeeded();
     await expect.poll(() => img.evaluate((el: HTMLImageElement) => el.complete && el.naturalWidth > 0)).toBe(true);
@@ -41,6 +41,10 @@ test('the pictures of the app load, and Screenshots in the nav bar goes to them'
   await expect(page.getByRole('img', { name: /^Rooted on a phone/ })).toBeVisible();
   await expect(page.getByRole('heading', { name: 'A closer look' })).toBeAttached();
   await expect(page.getByRole('heading', { name: /trees from around the world$/ })).toBeAttached();
+  await expect(page.getByText(/the new coconut palm by the sea/)).toBeAttached();
+  // Jesus's surprise visits, with His picture
+  await expect(page.getByRole('heading', { name: 'A surprise visit from Jesus' })).toBeAttached();
+  await expect(page.locator('.show').getByRole('img', { name: /^Jesus in a white robe and red sash/ })).toBeAttached();
   await expect(page.getByRole('heading', { name: 'Morning to night' })).toBeAttached();
   await expectPicturesLoaded(page);
 
@@ -53,6 +57,7 @@ test('the pictures in Tagalog', async ({ page }) => {
   await page.getByRole('button', { name: 'Tagalog' }).first().click();
   await expect(page.getByRole('heading', { name: 'Panoorin itong lumago' })).toBeAttached();
   await expect(page.getByRole('heading', { name: 'Mas malapitang tingin' })).toBeAttached();
+  await expect(page.getByRole('heading', { name: 'Isang sorpresang pagdalaw ni Hesus' })).toBeAttached();
   await expect(page.getByRole('img', { name: /^Ang Rooted sa computer/ })).toBeAttached();
   // the stage names come from the app's own words
   await expect(page.locator('.show-stage .tag')).toHaveText(['Usbong', 'Batang Puno', 'Ganap na Puno']);

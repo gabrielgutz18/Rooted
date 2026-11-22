@@ -1,0 +1,224 @@
+/* ---------- Jesus visiting your tree (Visitor.tsx) ---------- */
+.visitor {
+  --px: 3px; /* CSS pixels per art pixel, like the lamp post */
+  --gold: #ffd866;
+  --glow: rgb(255 238 170 / 0.75);
+  position: absolute;
+  /* the ground is 15% up from the bottom; the feet stand a little into the grass */
+  bottom: calc(15% - 2 * var(--px));
+  width: calc(var(--w) * var(--px));
+  height: calc(var(--h) * var(--px));
+  padding: 0;
+  border: 0;
+  background: none;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+.visitor canvas {
+  position: relative;
+  display: block;
+  width: 100%;
+  height: 100%;
+  image-rendering: pixelated;
+  filter: drop-shadow(0 0 3px var(--glow));
+}
+.visitor:focus-visible {
+  outline: 3px dashed #fff6c8;
+  outline-offset: 4px;
+}
+
+/* a soft light round Him, brightest at the halo */
+.visitor-aura {
+  position: absolute;
+  left: calc(10 * var(--px));
+  top: calc(9 * var(--px));
+  width: calc(44 * var(--px));
+  height: calc(44 * var(--px));
+  border-radius: 50%;
+  background: radial-gradient(circle, rgb(255 244 200 / 0.55) 0%, rgb(255 230 150 / 0.22) 35%, transparent 68%);
+  transform: translate(-50%, -50%);
+  animation: visitor-breathe 4s ease-in-out infinite;
+  pointer-events: none;
+}
+@keyframes visitor-breathe {
+  0%, 100% { opacity: 0.75; transform: translate(-50%, -50%) scale(0.95); }
+  50% { opacity: 1; transform: translate(-50%, -50%) scale(1.05); }
+}
+
+/* the column of light He comes and goes in */
+.visitor-light {
+  position: absolute;
+  left: calc(10 * var(--px));
+  bottom: calc(1 * var(--px));
+  width: calc(26 * var(--px));
+  height: 320%;
+  background: linear-gradient(to top, rgb(255 246 205 / 0.85), rgb(255 240 180 / 0.35) 45%, transparent);
+  transform: translateX(-50%) scaleX(0.2);
+  transform-origin: 50% 100%;
+  opacity: 0;
+  pointer-events: none;
+}
+.visitor.is-arrive .visitor-light {
+  animation: visitor-beam 1.5s ease-out forwards;
+}
+.visitor.is-leave .visitor-light {
+  animation: visitor-beam 1.7s ease-in forwards;
+}
+@keyframes visitor-beam {
+  0% { opacity: 0; transform: translateX(-50%) scaleX(0.2); }
+  30% { opacity: 1; transform: translateX(-50%) scaleX(1); }
+  100% { opacity: 0; transform: translateX(-50%) scaleX(0.5); }
+}
+.visitor.is-arrive canvas {
+  animation: visitor-appear 1.5s ease-out both;
+}
+@keyframes visitor-appear {
+  0% { opacity: 0; transform: translateY(calc(-8 * var(--px))); filter: brightness(3) drop-shadow(0 0 8px var(--glow)); }
+  45% { opacity: 1; }
+  100% { opacity: 1; transform: none; filter: brightness(1) drop-shadow(0 0 3px var(--glow)); }
+}
+.visitor.is-leave canvas,
+.visitor.is-leave .visitor-aura {
+  animation: visitor-go 1.7s ease-in forwards;
+}
+@keyframes visitor-go {
+  0% { opacity: 1; transform: none; filter: brightness(1.4) drop-shadow(0 0 6px var(--glow)); }
+  100% { opacity: 0; transform: translateY(calc(-14 * var(--px))); filter: brightness(3) drop-shadow(0 0 12px var(--glow)); }
+}
+
+/* blessing the note: the light round Him swells */
+.visitor.is-bless canvas {
+  filter: drop-shadow(0 0 8px var(--glow)) drop-shadow(0 0 2px var(--gold));
+}
+.visitor.is-bless .visitor-aura {
+  animation: visitor-bless 1.6s ease-out infinite;
+}
+@keyframes visitor-bless {
+  0% { opacity: 0.6; transform: translate(-50%, -50%) scale(0.9); }
+  40% { opacity: 1; transform: translate(-50%, -50%) scale(1.5); }
+  100% { opacity: 0.6; transform: translate(-50%, -50%) scale(0.9); }
+}
+
+/* His palm on the bark: light gathers there and flows up into the tree */
+.visitor-palm {
+  position: absolute;
+  left: calc((var(--tx) + 0.5) * var(--px));
+  top: calc((var(--ty) + 0.5) * var(--px));
+  width: calc(14 * var(--px));
+  height: calc(14 * var(--px));
+  border-radius: 50%;
+  background: radial-gradient(circle, rgb(255 250 220 / 0.95) 0%, rgb(255 226 130 / 0.5) 35%, transparent 70%);
+  transform: translate(-50%, -50%);
+  animation: visitor-palm var(--pulse) ease-in-out infinite;
+  pointer-events: none;
+  display: none;
+}
+.visitor.is-touching .visitor-palm {
+  display: block;
+}
+.visitor-palm::after {
+  content: '';
+  position: absolute;
+  left: 50%;
+  bottom: 50%;
+  width: calc(2 * var(--px));
+  height: calc(60 * var(--px));
+  background: linear-gradient(to top, rgb(255 246 200 / 0.9), rgb(255 236 160 / 0.4) 50%, transparent);
+  transform: translateX(-50%) scaleY(0);
+  transform-origin: 50% 100%;
+  animation: visitor-flow var(--pulse) ease-out infinite;
+}
+@keyframes visitor-palm {
+  0%, 100% { opacity: 0.35; transform: translate(-50%, -50%) scale(0.7); }
+  40% { opacity: 1; transform: translate(-50%, -50%) scale(1.15); }
+}
+@keyframes visitor-flow {
+  0%, 25% { opacity: 0; transform: translateX(-50%) scaleY(0); }
+  45% { opacity: 1; }
+  80% { opacity: 0; transform: translateX(-50%) scaleY(1); }
+  100% { opacity: 0; transform: translateX(-50%) scaleY(1); }
+}
+
+/* what's happening, in the hero's corner where the greeting is (not over the tree) */
+.hero-chip.visit-chip {
+  gap: 8px;
+  white-space: nowrap;
+  color: #fff6c8;
+  box-shadow: 0 0 0 2px rgb(22 12 28 / 0.9), 0 0 0 4px #d8a630;
+  animation: visit-chip-in 0.4s ease-out;
+}
+.hero-chip.visit-chip.is-blessed {
+  box-shadow: 0 0 0 2px rgb(22 12 28 / 0.9), 0 0 0 4px var(--gold, #ffd866), 0 0 16px rgb(255 216 102 / 0.7);
+}
+.visit-chip .blessed-halo {
+  box-shadow: 0 0 0 2px #ffd866;
+}
+@keyframes visit-chip-in {
+  from { opacity: 0; transform: translateY(-6px); }
+  to { opacity: 1; transform: none; }
+}
+
+/* He is the light: He doesn't dim at dusk or at night, and shines a little more */
+.hero-dusk .visitor canvas,
+.hero-night .visitor canvas {
+  filter: drop-shadow(0 0 6px var(--glow)) drop-shadow(0 0 2px rgb(255 238 170 / 0.9));
+}
+.hero-night .visitor-aura {
+  background: radial-gradient(circle, rgb(255 244 200 / 0.6) 0%, rgb(255 230 150 / 0.3) 40%, transparent 70%);
+}
+
+/* the "+N" over the tree, when the note was blessed */
+.float-points.is-blessed {
+  color: #ffe27a;
+}
+.float-points.is-blessed small {
+  font-size: 22px;
+  margin-left: 6px;
+  color: #fff6c8;
+}
+
+/* in the note form while He’s visiting (.tag. first: styles.css loads after this file) */
+.tag.blessed-tag {
+  background: #fff3c4;
+  color: #4a2c06;
+  box-shadow: 0 0 0 2px #d8a630, 0 0 10px rgb(255 216 102 / 0.55);
+}
+.tag.blessed-tag b {
+  color: #9a4a0a;
+}
+.blessed-halo {
+  display: inline-block;
+  width: 10px;
+  height: 5px;
+  border-radius: 50%;
+  box-shadow: 0 0 0 2px #e8a830;
+  margin-right: 2px;
+}
+
+@media (max-width: 860px) {
+  .visitor {
+    --px: 2px;
+  }
+  /* beside the Menu button on a phone */
+  .hero-chip.visit-chip {
+    gap: 6px;
+    padding: 4px 9px;
+    font-size: 13px;
+  }
+}
+@media (max-width: 360px) {
+  .hero-chip.visit-chip {
+    font-size: 12px;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .visitor-aura,
+  .visitor-palm,
+  .visitor-palm::after,
+  .visitor.is-bless .visitor-aura {
+    animation: none !important;
+  }
+  .visitor-palm::after {
+    display: none;
+  }
+}

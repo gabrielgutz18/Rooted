@@ -494,6 +494,12 @@ function cloud(): Backend {
         delete row.created_at;
         ({ data, error } = await sb.from('entries').insert(row).select('id, points, created_at').single());
       }
+      // a note written while Jesus visited carries 3× (src/lib/visit.ts); until the database has
+      // 20261122000002_blessed_notes.sql it still caps a note at 60, so keep the note with 60
+      if (error?.code === '23514' && /points/.test(error.message) && Number(row.points) > 60) {
+        row.points = 60;
+        ({ data, error } = await sb.from('entries').insert(row).select('id, points, created_at').single());
+      }
       if (!error) return { ...input, ...(data as Pick<Entry, 'id' | 'points' | 'created_at'>) };
       // already uploaded earlier (the reply got lost): fetch the saved copy instead
       if (error.code === '23505') {

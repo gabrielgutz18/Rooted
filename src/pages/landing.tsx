@@ -13,8 +13,8 @@ import LandingUpdates, { LatestUpdate, useUpdateScroll } from './landing-updates
 // The tree on the landing page grows a stage at a time, the way notes grow yours.
 const STEPS = [60, 250, 700, 1800, 4000];
 const STEP_MS = 2800;
-// a few of the brightest trees; one is picked for each visit
-const SHOWN = ['sakura', 'jacaranda', 'poinciana', 'maple', 'oak'];
+// a few of the brightest trees, and the newest; one is picked for each visit
+const SHOWN = ['sakura', 'jacaranda', 'poinciana', 'maple', 'oak', 'coconut'];
 
 const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
 
