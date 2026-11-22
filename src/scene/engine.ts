@@ -8,6 +8,8 @@
 import { growthValue, STAGES } from '../lib/growth';
 import { buildBackdrop, makeCloud } from './backdrop';
 import { clumpSprite, edgeLeaves, EDGE_MAX, type ClumpStyle } from './foliage';
+import { landOf } from './lands';
+import { drawCoconut, drawFronds, drawNuts, drawRings, drawShoot, frondClumps, frondReach, layFronds } from './palm';
 import { buildTree, speciesOf, type Species, type Tree } from './species';
 import { getSprites, type Sprite } from './sprites';
 import {
@@ -49,7 +51,7 @@ const rand = (a: number, b: number) => a + Math.random() * (b - a);
 
 interface Walker {
   sprite: Sprite;
-  kind: 'squirrel' | 'raccoon' | 'deer';
+  kind: 'squirrel' | 'raccoon' | 'deer' | 'crab';
   x: number; // pixels from the middle
   dir: 1 | -1;
   walking: boolean;
@@ -143,6 +145,12 @@ function crownOf(tree: Tree): { top: number; half: number } {
     // a clump's leaves reach a little past its radius
     top = Math.max(top, -y1[i] + nd.leaf * 1.3);
     half = Math.max(half, Math.abs(x1[i]) + nd.leaf * 1.3);
+  }
+  if (tree.fronds && !tree.sprout && n) {
+    // a palm's fronds spread out from the top of its trunk
+    const r = frondReach(tree);
+    top = Math.max(top, -y1[n - 1] + r.up);
+    half = Math.max(half, Math.abs(x1[n - 1]) + r.side);
   }
   return { top, half };
 }
@@ -374,6 +382,7 @@ export class Scene {
     if (sp.id !== this.speciesId) {
       this.speciesId = sp.id;
       this.particles = this.particles.filter((p) => p.kind === 'spark');
+      this.walkers = []; // each land has its own animals (crabs on a beach); they wander in again
     }
     // grow smoothly toward the real size
     this.g += (target - this.g) * Math.min(1, dt * 0.8);
@@ -491,7 +500,8 @@ export class Scene {
       x1[i] = x0[i] + Math.cos(ang[i]) * nd.len;
       y1[i] = y0[i] + Math.sin(ang[i]) * nd.len;
     }
-    const pine = sp.foliage === 'pine', willow = sp.foliage === 'willow', hang = sp.hang;
+    const pine = sp.foliage === 'pine', willow = sp.foliage === 'willow', hang = sp.hang, palm = sp.foliage === 'palm';
+    const beach = !!landOf(sp.id).beach;
     const clumps: ClumpAt[] = [];
     for (let i = 0; i < n; i++) {
       const nd = tree.nodes[i];
@@ -505,6 +515,9 @@ export class Scene {
         back: pine ? nd.ls % 4 === 0 : nd.ls % 2 === 0, squash: nd.squash,
       });
     }
+    // a palm has fronds instead of clumps (stand-ins along them still drop leaves and hold birds)
+    const fronds = palm && !tree.sprout && n ? layFronds(tree, cx + x1[n - 1] * z, gy + y1[n - 1] * z, z, ft, gust, bare, gy, windOn) : null;
+    if (fronds) clumps.push(...frondClumps(fronds));
     this.clumps = clumps;
 
     // ----- underground and on the ground -----
@@ -524,7 +537,7 @@ export class Scene {
     }
 
     const animals = this.opts.animals;
-    if (animals) this.moveAnimals(stage, W, period, dt);
+    if (animals) this.moveAnimals(stage, W, period, dt, beach);
     const drawWalker = (a: Walker) => {
       const fr = a.walking ? Math.floor(t * 6) % 2 : a.kind === 'deer' && Math.sin(t * 0.5 + a.x) > 0 ? 2 : 0;
       const s = this.graded(a.sprite.frames[fr], period);
@@ -541,8 +554,8 @@ export class Scene {
     const rf = clamp(0.4 + g * 4, 0.4, 1) * z; // seedlings get thinner stems
     const limbs = (pass: 0 | 1) => {
       const r0 = (tree.nodes[0]?.r0 ?? 0) * rf;
-      if (r0 > 2) {
-        // the trunk flares out where it meets the ground
+      if (r0 > 2 && !palm) {
+        // the trunk flares out where it meets the ground (a palm's just swells a little)
         for (const s of [-1, 1])
           limb(p, cx + s * r0 * 1.7, gy + 1, cx, gy - r0 * 1.3, r0 * 0.45, r0 * 0.75, wood, pal.barkOut, L, 5 + s, 0, false, pass, -1e9, 1e9, g > 0.3 ? pal.streaks : undefined);
       }
@@ -556,7 +569,26 @@ export class Scene {
       }
     };
 
-    if (this.state.points <= 0 && g < 0.002) {
+    if (palm) {
+      // a coconut palm grows from a whole coconut, which stays at its foot for a while
+      const G = GRADE[period], nut = 2.3 * z, nutSeed = this.seed % 97;
+      const lean = Math.sign((tree.nodes[0]?.off ?? 0) + Math.PI / 2) || 1;
+      if (tree.sprout) {
+        drawCoconut(p, cx, gy, nut, L, G, nutSeed);
+        if (this.state.points > 0 || g >= 0.002) drawShoot(p, cx, gy, nut, g, pal.sproutLeaves, lxs, ft, gust, bare);
+      } else if (fronds) {
+        if (g < 0.3) drawCoconut(p, cx - lean * nut * 0.5, gy, nut, L, G, nutSeed, clamp((0.3 - g) / 0.06, 0, 1));
+        drawFronds(p, fronds, true, pal.leavesBack, L, ft, gust, gy, windOn);
+        limbs(0);
+        limbs(1);
+        drawRings(p, tree, cx, gy, z, rf, x0, y0, x1, y1, wood);
+        drawFronds(p, fronds, false, pal.leaves, L, ft, gust, gy, windOn);
+        // coconuts hang just under the crown, in front of the fronds' stalks
+        const top = tree.nodes[n - 1];
+        if (tree.nuts && stage >= 4 && bare < 0.5)
+          drawNuts(p, cx + x1[n - 1] * z, gy + y1[n - 1] * z, Math.max(2, top.r1 * rf * 1.1), tree.nuts, this.seed, L, G);
+      }
+    } else if (this.state.points <= 0 && g < 0.002) {
       this.drawSeed(cx, gy, z, L, period);
     } else if (tree.sprout) {
       limbs(1);
@@ -590,19 +622,19 @@ export class Scene {
       if (willow) for (const c of clumps) if (!c.back) this.drawStrands(c, pal.leaves, L, lxs, leafLen, ft, gust, gy, cx);
       if (hang) for (const c of clumps) if (!c.back && stage >= 2) this.drawStrands(c, pal.hang, L, lxs, leafLen, ft, gust, gy, cx, hang.len);
       if (pal.bloom && stage >= 3) for (const c of clumps) if (!c.back && c.r >= 3 && c.ls % 3 !== 0) this.drawBlooms(c, pal.bloom, gust, ft);
-      // birds resting on top of the leaves
-      if (animals && stage >= 3) {
-        const front = clumps.filter((c) => !c.back);
-        for (let k = 0; k < Math.min(3, stage - 2) && front.length; k++) {
-          const c = front[(k * 37 + (this.seed % 97)) % front.length];
-          const s = this.graded(this.sprites.birds[k % 3].frames[2], period);
-          blit(p, s, Math.round(c.x - s.w / 2), Math.round(c.y - c.r * c.squash - s.h + 4), Math.sin(t * 0.3 + k * 1.7) > 0);
-        }
+    }
+    // birds resting on top of the leaves (or a palm's fronds)
+    if (animals && stage >= 3) {
+      const front = clumps.filter((c) => !c.back);
+      for (let k = 0; k < Math.min(3, stage - 2) && front.length; k++) {
+        const c = front[(k * 37 + (this.seed % 97)) % front.length];
+        const s = this.graded(this.sprites.birds[k % 3].frames[2], period);
+        blit(p, s, Math.round(c.x - s.w / 2), Math.round(c.y - c.r * c.squash - s.h + 4), Math.sin(t * 0.3 + k * 1.7) > 0);
       }
     }
 
     for (const a of this.walkers) if (a.kind === 'squirrel') drawWalker(a);
-    this.drawGrass(W, gy, cx, t, windOn, gust, pal);
+    if (!beach) this.drawGrass(W, gy, cx, t, windOn, gust, pal); // sand has no grass
 
     // birds crossing the sky
     for (const b of this.flyers) {
@@ -964,13 +996,18 @@ export class Scene {
 
   // ---------- animals ----------
 
-  private moveAnimals(stage: number, W: number, period: Period, dt: number) {
+  private moveAnimals(stage: number, W: number, period: Period, dt: number, beach: boolean) {
     const sp = this.sprites;
     const want: [Walker['kind'], Sprite, number][] = [];
-    if (stage >= 3) want.push(['squirrel', sp.squirrel, 16]);
-    if (stage >= 4) want.push(['raccoon', sp.raccoon, 8]);
-    if (stage >= 5) want.push(['deer', sp.deer, 7]);
-    if (stage >= 6) want.push(['deer', sp.deer, 6], ['squirrel', sp.squirrel, 18]);
+    if (beach) {
+      // crabs scuttling about on the sand, one more for each stage
+      for (let s = 3; s <= Math.min(6, stage); s++) want.push(['crab', sp.crab, 4 + ((s * 3) % 5)]);
+    } else {
+      if (stage >= 3) want.push(['squirrel', sp.squirrel, 16]);
+      if (stage >= 4) want.push(['raccoon', sp.raccoon, 8]);
+      if (stage >= 5) want.push(['deer', sp.deer, 7]);
+      if (stage >= 6) want.push(['deer', sp.deer, 6], ['squirrel', sp.squirrel, 18]);
+    }
     while (this.walkers.length < want.length) {
       const [kind, sprite, speed] = want[this.walkers.length];
       const dir = Math.random() < 0.5 ? 1 : -1;

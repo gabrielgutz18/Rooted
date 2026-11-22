@@ -1,12 +1,13 @@
 // The trees you can grow. Each one is a palette plus a few numbers that shape how
-// the branches split; the pine has its own builder because it grows in tiers.
+// the branches split; the pine has its own builder because it grows in tiers, and the
+// coconut palm its own because it doesn't branch at all (src/scene/palm.ts draws it).
 
 import { clamp, mulberry32, TAU } from './raster';
 
 export type SpeciesId =
   | 'oak' | 'sakura' | 'maple' | 'apple' | 'birch' | 'willow' | 'pine'
   | 'jacaranda' | 'eucalyptus' | 'socotra' | 'poinciana' | 'goldenshower' | 'magnolia'
-  | 'spruce' | 'silktree' | 'baobab' | 'ginkgo' | 'trumpet' | 'monkeypuzzle';
+  | 'spruce' | 'silktree' | 'baobab' | 'ginkgo' | 'trumpet' | 'monkeypuzzle' | 'coconut';
 
 interface Shape {
   maxd: number; // how many times branches split
@@ -42,7 +43,7 @@ export interface Species {
   barkOutline: string;
   birch?: boolean;
   leaves: string[]; // [0] is the outline, then dark → light
-  foliage: 'round' | 'blossom' | 'willow' | 'pine';
+  foliage: 'round' | 'blossom' | 'willow' | 'pine' | 'palm';
   flower?: string;
   fruit?: string;
   /** Big flowers sitting on the leaves (magnolia, silk tree). */
@@ -321,6 +322,19 @@ export const SPECIES: Species[] = [
     fallRate: 0.1,
     shape: { maxd: 0, height: 1.05, trunk: 0, trunkR: 0.045, spread: 0, spreadVar: 0, light: 0, decay: 0, kids3: 0, leaf: 1, squash: 0.5 },
   },
+  {
+    id: 'coconut',
+    name: 'Coconut Palm',
+    blurb: 'Swaying fronds and coconuts by the sea.',
+    bark: ['#2e261e', '#463a2e', '#5e5040', '#786854', '#94846c', '#b0a088'],
+    barkOutline: '#16120e',
+    leaves: ['#0a200e', '#143a16', '#1e5420', '#2c6e28', '#408a30', '#5ea63a', '#84c24a', '#b4de6c'],
+    foliage: 'palm',
+    fall: ['#84c24a', '#c8b050', '#a88a3a'],
+    fallKind: 'leaf',
+    fallRate: 0.3,
+    shape: { maxd: 0, height: 1.08, trunk: 0, trunkR: 0.034, spread: 0, spreadVar: 0, light: 0, decay: 0, kids3: 0, leaf: 1, squash: 0.5 },
+  },
 ];
 
 export function speciesOf(id: string | null | undefined): Species {
@@ -344,15 +358,30 @@ export interface TNode {
   squash: number;
 }
 
+/** One palm frond, starting at the top of the trunk. */
+export interface Frond {
+  a: number; // the way it points where it leaves the trunk (-π/2 = straight up)
+  len: number; // world units
+  droop: number; // how far it bends down toward its tip (radians)
+  phase: number;
+  ls: number; // its own seed
+  back: boolean; // behind the trunk and the coconuts
+}
+
 export interface Tree {
   nodes: TNode[];
   S: number; // rough height in world units
   sprout: boolean; // just a stem with its first leaves
+  /** A palm's crown (its trunk is `nodes`, one segment above the other). */
+  fronds?: Frond[];
+  /** How many coconuts hang under a palm's crown. */
+  nuts?: number;
 }
 
 /** Same seed → same tree at every size, so it grows instead of reshuffling. */
 export function buildTree(sp: Species, seed: number, g: number): Tree {
   if (sp.foliage === 'pine') return buildConifer(sp, seed, g);
+  if (sp.foliage === 'palm') return buildPalm(sp, seed, g);
   const sh = sp.shape;
   const taper = sh.taper ?? 0.7;
   const rng = mulberry32(seed);
@@ -449,4 +478,50 @@ function buildConifer(sp: Species, seed: number, g: number): Tree {
     parent = idx;
   }
   return { nodes, S, sprout: false };
+}
+
+/**
+ * A coconut palm: one slim trunk that leans out and curves back up, under a crown of long
+ * fronds. A young palm is nearly all fronds; the trunk rises as it grows. The fronds are laid
+ * out once from the seed and each size shows the first so many, so new ones fill the gaps
+ * instead of the crown reshuffling.
+ */
+function buildPalm(sp: Species, seed: number, g: number): Tree {
+  const S = (5 + 150 * Math.pow(g, 1.15)) * sp.shape.height;
+  const k = clamp((g - 0.1) / 0.5, 0, 1); // 0 = a young palm, 1 = grown
+  // the crown has its own random numbers, so the trunk's (more segments as it grows) can't shift it
+  const fr = mulberry32(seed ^ 0x9e3779b9);
+  const side = fr() < 0.5 ? -1 : 1;
+  const lean = (0.1 + fr() * 0.12) * (0.3 + 0.7 * k);
+  const all: Frond[] = [];
+  for (let i = 0; i < 16; i++) {
+    const u = (0.5 + i * 0.618034) % 1; // any first few are spread evenly round the crown
+    const out = Math.abs(u - 0.5) * 2; // 0 = straight up, 1 = out to the side
+    all.push({
+      a: -Math.PI / 2 + (u - 0.5) * 3.2 + (fr() - 0.5) * 0.12,
+      // fronds turned toward or away from us look shorter
+      len: S * (0.5 - 0.14 * k) * (0.62 + 0.38 * fr()) * (out < 0.15 ? 0.75 : 1),
+      droop: (0.35 + 1.25 * out + fr() * 0.35) * (0.55 + 0.45 * k),
+      phase: fr() * TAU,
+      ls: (fr() * 1e9) | 0,
+      back: i % 2 === 1,
+    });
+  }
+
+  const rng = mulberry32(seed);
+  const trunkH = S * (0.1 + 0.62 * k);
+  const segs = Math.max(3, Math.round(3 + g * 9));
+  const r0 = Math.max(0.7, S * sp.shape.trunkR);
+  // slim all the way up, with a swollen foot
+  const rAt = (h: number) => r0 * (0.82 + 0.18 * (1 - h)) * (1 + 0.2 * Math.max(0, 1 - h * 6));
+  const nodes: TNode[] = [];
+  for (let i = 0; i < segs; i++) {
+    const h = i / segs;
+    nodes.push({
+      parent: i - 1, off: i === 0 ? -Math.PI / 2 + side * lean : (-side * lean * 0.9) / (segs - 1), len: trunkH / segs,
+      r0: rAt(h), r1: rAt(h + 1 / segs), depth: i, flex: 0.1 * i, at: 1, phase: rng() * TAU, leaf: 0, ls: (rng() * 1e9) | 0, squash: 0.5,
+    });
+  }
+  const nuts = g >= 0.66 ? 3 + Math.round(3 * clamp((g - 0.66) / 0.3, 0, 1)) : 0;
+  return { nodes, S, sprout: g < 0.1, fronds: all.slice(0, Math.round(4 + 10 * k)), nuts };
 }

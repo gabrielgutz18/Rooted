@@ -6,16 +6,21 @@ import type { SpeciesId } from './species';
 
 export type Far =
   | 'peaks' | 'rockies' | 'fuji' | 'rolling' | 'taiga' | 'karst' | 'ridges'
-  | 'volcano' | 'kilimanjaro' | 'mesa' | 'sugarloaf' | 'spires';
+  | 'volcano' | 'kilimanjaro' | 'mesa' | 'sugarloaf' | 'spires' | 'sea';
 export type Landmark =
   | 'pagoda' | 'spire' | 'yurt' | 'onion' | 'bridge' | 'hut' | 'canoe'
   | 'adobe' | 'vinta' | 'dhow' | 'tranogasy' | 'chhatri' | 'farmhouse' | 'cabin' | 'windcatcher' | 'rondavel'
-  | 'paifang' | 'church' | 'ruka';
+  | 'paifang' | 'church' | 'ruka' | 'bangka';
 
 export interface Land {
   /** The place, in English (the Tagalog name is in src/lib/i18n.tsx). */
   name: string;
   far: Far;
+  /**
+   * A beach: the sea runs out to the horizon (with an island on it, at `peakAt`), the ground
+   * is sand instead of grass and soil, and crabs walk on it instead of squirrels and deer.
+   */
+  beach?: boolean;
   /** A lake or river between the far mountains and the hills. */
   water?: boolean;
   hills: {
@@ -213,6 +218,17 @@ export const LANDS: Record<SpeciesId, Land> = {
     landmark: 'ruka',
     landmarkAt: -0.27,
     peakAt: 0.2,
+  },
+  coconut: {
+    name: 'tropical beaches',
+    far: 'sea',
+    beach: true,
+    hills: { base: 0, amp: 0, freq: 1, colors: GREEN }, // a beach has no hills
+    farTrees: 0,
+    landmark: 'bangka',
+    landmarkAt: 0.27,
+    peakAt: -0.3,
+    meadow: ['#d4b47a', '#e2c690', '#eed8a6'],
   },
 };
 

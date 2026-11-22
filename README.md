@@ -22,7 +22,7 @@ that browser. Good for trying it out.
 Add `?hour=21` to the address to preview another time of day (0–23), and `?tree=sakura`
 to preview another tree (`oak`, `sakura`, `maple`, `apple`, `birch`, `willow`, `pine`, `jacaranda`,
 `eucalyptus`, `socotra`, `poinciana`, `goldenshower`, `magnolia`, `spruce`, `silktree`, `baobab`,
-`ginkgo`, `trumpet`, `monkeypuzzle`).
+`ginkgo`, `trumpet`, `monkeypuzzle`, `coconut`).
 Everyone picks their own tree on first visit, and can change it from the menu (Choose tree).
 
 To try trial mode while Supabase keys are set, start the `rooted-trial` launch entry

@@ -101,6 +101,14 @@ export function buildBackdrop(W: number, H: number, gy: number, stops: [string, 
   // in a narrow view (the picker cards) landmarks move out toward the edges, clear of the tree
   const narrow = W < H * 1.4;
   const aside = (a: number) => (narrow ? Math.sign(a) * Math.max(Math.abs(a), 0.36) : a);
+  // a beach: the sea's horizon, and the shore where the waves come up the sand
+  const seaTop = gy - Math.round(H * 0.17);
+  const shore = (x: number) => gy - Math.round(H * (0.055 + 0.02 * noise1(U(x) * 3 + 7, 31)));
+  const island = { at: cx + aside(land.peakAt ?? -0.3) * W, hw: H * 0.3 };
+  const islandTop = (x: number) => {
+    const d = Math.abs(x - island.at) / island.hw;
+    return d >= 1 ? gy : seaTop - H * (0.032 * Math.pow(1 - d * d, 0.7) + 0.006 * noise1(x * 0.25, 5));
+  };
   /**
    * A lone mountain at `at`: `hw` half-width and `peak` height (shares of the view height),
    * sides curving by `pow`, cut flat at `cap` of its height, snow above `snow`.
@@ -199,6 +207,26 @@ export function buildBackdrop(W: number, H: number, gy: number, stops: [string, 
       farLayer((x) => gy - H * (0.09 + 0.15 * (0.6 * ridge(U(x), 1.9, 17) + 0.4 * fbm(U(x) * 1.8 + 17, 53))), 'ridgeMid');
       farLayer((x) => gy - H * (0.06 + 0.08 * fbm(U(x) * 2.3 + 29, 57)), 'ridgeFront');
       break;
+    case 'sea':
+      // open sea, with one low green island far out on it
+      farLayer(islandTop, 'rolling', island.at - island.hw, island.at + island.hw);
+      break;
+  }
+
+  // ----- the sea, out to the horizon: deep blue far off, turquoise in the shallows -----
+  if (land.beach) {
+    const bands = gradeAll(['#2a62a0', '#2e74b0', '#3388bc', '#3c9ec4', '#4ab4c8', '#6cccc8'], G).map((c, i) => fade(c, 0.26 - i * 0.05));
+    const glint = fade(grade(hex('#eef8fa'), G), 0.15);
+    for (let y = seaTop; y < gy; y++) {
+      const k = (y - seaTop) / Math.max(1, gy - seaTop);
+      for (let x = 0; x < W; x++) {
+        let c = bands[Math.min(bands.length - 1, Math.max(0, Math.floor(k * (bands.length - 0.01) + (bayer(x, y) - 0.5) * 0.8)))];
+        // little whitecaps and glitter, in short flat dashes
+        if (noise2(x * (0.09 + k * 0.08), y * (1.3 - k * 0.6), 63) > 0.8 - k * 0.04) c = mixc(glint, c, 0.45);
+        px[y * W + x] = c;
+      }
+    }
+    for (let x = 0; x < W; x++) top[x] = Math.min(top[x], seaTop);
   }
 
   // ----- a lake or river, reflecting the mountains -----
@@ -225,7 +253,7 @@ export function buildBackdrop(W: number, H: number, gy: number, stops: [string, 
   const [hA, hB] = gradeAll(hl.colors, G).map((c) => fade(c, 0.24));
   const [tLip, tDark] = gradeAll(['#86c060', '#3f7a38'], G).map((c) => fade(c, 0.22));
   const step = Math.max(2, Math.round(2.2 * u)); // rice terrace height
-  for (let x = 0; x < W; x++) {
+  for (let x = 0; x < W && !land.beach; x++) {
     const t0 = midTop(x);
     for (let y = t0; y < gy; y++) {
       const k = (y - t0) / Math.max(1, gy - t0);
@@ -248,6 +276,25 @@ export function buildBackdrop(W: number, H: number, gy: number, stops: [string, 
   const mini = (x0: number, cy: number, r: number, haze: number, evergreen: boolean) => {
     const shape = evergreen ? 'pine' : sp.foliage === 'pine' ? 'pine' : sp.birch ? 'birch' : sp.foliage;
     const [dk, md, lt] = (evergreen ? pineLeaf : leaf).map((c) => fade(c, haze));
+    if (shape === 'palm') {
+      // a slim leaning trunk and a star of drooping fronds
+      const tc = fade(trunkC, haze), lean = h2(x0, 64) < 0.5 ? -1 : 1;
+      const tx = x0 + lean * r * 0.35, ty = cy - r * 0.2, base = cy + r * 1.6;
+      for (let y = Math.round(ty); y <= Math.round(base); y++) {
+        const q = (base - y) / (base - ty);
+        put(x0 + lean * r * 0.35 * Math.pow(q, 1.6), y, tc);
+      }
+      for (const a of [-2.9, -2.35, -1.85, -1.3, -0.8, -0.25]) {
+        const toward = Math.cos(a) < 0 ? -1 : 1, len = r * 1.35;
+        for (let s = 0; s <= len; s += 0.6) {
+          const q = s / len, b = a + toward * 1.1 * Math.pow(q, 1.3);
+          const x = tx + Math.cos(a) * s * 0.9 + Math.cos(b) * s * 0.1, y = ty + Math.sin(b) * s;
+          put(x, y, q < 0.5 && a > -2 && a < -1.1 ? lt : md);
+          if (r > 2.4 && q > 0.2) put(x, y + 1, dk);
+        }
+      }
+      return;
+    }
     const R = Math.ceil(r) + 1;
     if (r >= 2.2 && shape !== 'pine') {
       const tc = fade(evergreen ? pineLeaf[0] : trunkC, haze);
@@ -274,7 +321,14 @@ export function buildBackdrop(W: number, H: number, gy: number, stops: [string, 
       }
   };
   const farR = (i: number) => (1.5 + h2(i, 62) * 2.2) * Math.max(0.8, sc);
-  if (land.orchard) {
+  if (land.beach) {
+    // a few palms on the island out at sea
+    for (let k = 0; k < 4; k++) {
+      const x = Math.round(island.at + (k - 1.4) * island.hw * 0.28 + (h2(k, 65) - 0.5) * island.hw * 0.1);
+      const r = (1.1 + h2(k, 66) * 0.6) * Math.max(0.8, sc);
+      mini(x, islandTop(x) - r * 1.5, r, 0.4, false);
+    }
+  } else if (land.orchard) {
     // neat rows down the hillside
     const k = Math.max(0.9, sc);
     for (let row = 0; row < 3; row++) {
@@ -293,33 +347,40 @@ export function buildBackdrop(W: number, H: number, gy: number, stops: [string, 
     }
   }
 
-  // ----- the landmark -----
-  drawLandmark(land.landmark, markX, afloat ? gy - Math.round(H * 0.045) : midTop(markX) + u, u, G, fade, put, rect);
+  // ----- the landmark (on a beach, a boat out on the water) -----
+  const markY = land.beach ? Math.round(seaTop + (gy - H * 0.06 - seaTop) * 0.5) : afloat ? gy - Math.round(H * 0.045) : midTop(markX) + u;
+  drawLandmark(land.landmark, markX, markY, u, G, fade, put, rect);
 
-  // ----- a few nearer trees at the back of the meadow -----
-  const nearTop = (x: number) => gy - Math.round(H * (0.012 + 0.035 * noise1(U(x) * 4.5 + 7, 31)));
-  const nearCount = Math.max(2, Math.round(W / (H * 0.22)));
+  // ----- a few nearer trees at the back of the meadow (on a beach, palms along the shore) -----
+  const nearTop = land.beach ? shore : (x: number) => gy - Math.round(H * (0.012 + 0.035 * noise1(U(x) * 4.5 + 7, 31)));
+  const nearCount = land.beach ? 2 : Math.max(2, Math.round(W / (H * 0.22)));
   for (let i = 0; i < nearCount; i++) {
     const x = Math.round(((i + 0.2 + h2(i, 71) * 0.6) / nearCount) * W);
     if (Math.abs(x - cx) < W * 0.12 || Math.abs(x - markX) < H * 0.1) continue; // keep the tree and landmark clear
     const r = (2.6 + h2(i, 72) * 2.2) * Math.max(0.9, sc);
-    mini(x, nearTop(x) - r * 0.5, r, 0.12, h2(i, 73) < (land.farPines ?? 0));
+    mini(x, nearTop(x) - r * (land.beach ? 2 : 0.5), r, 0.12, h2(i, 73) < (land.farPines ?? 0));
   }
 
-  // ----- near meadow -----
+  // ----- near meadow (on a beach: foam where the waves run up, damp sand, then dry sand) -----
   const [mB, mA, mC] = gradeAll(land.meadow ?? ['#58963f', '#6aa84e', '#7cba58'], G);
+  const [foam, foamDk, wet] = gradeAll(['#f6fcfa', '#cfe8ea', '#b8995e'], G);
   for (let x = 0; x < W; x++) {
     const t0 = nearTop(x);
+    if (land.beach) {
+      if (h2(x, 81) < 0.9) put(x, t0 - 1, h2(x, 82) < 0.7 ? foam : foamDk);
+      if (h2(x, 83) < 0.35) put(x, t0 - 2, foamDk);
+    }
     for (let y = t0; y < gy; y++) {
       const n = noise2(x * 0.35, y * 0.9, 77);
-      px[y * W + x] = y === t0 ? mC : n + (bayer(x, y) - 0.5) * 0.3 > 0.55 ? mA : mB;
+      if (land.beach && y - t0 < 2) px[y * W + x] = y === t0 || bayer(x, y) < 0.5 ? wet : mB;
+      else px[y * W + x] = y === t0 ? mC : n + (bayer(x, y) - 0.5) * 0.3 > 0.55 ? mA : mB;
     }
-    top[x] = Math.min(top[x], t0);
+    top[x] = Math.min(top[x], land.beach ? t0 - 2 : t0);
   }
 
-  // ----- grass edge and soil -----
-  const [g0, g1, g2] = gradeAll(['#86c85a', '#4f9a3c', '#2f6a2e'], G);
-  const soil = gradeAll(['#6a4630', '#5a3b28', '#4a3020', '#3a2418', '#2c1b12'], G);
+  // ----- grass edge and soil (on a beach, sand all the way down) -----
+  const [g0, g1, g2] = gradeAll(land.beach ? ['#f2dfb0', '#e2c890', '#cdb078'] : ['#86c85a', '#4f9a3c', '#2f6a2e'], G);
+  const soil = gradeAll(land.beach ? ['#d6b87e', '#c8a870', '#b89662', '#a48454', '#8c7046'] : ['#6a4630', '#5a3b28', '#4a3020', '#3a2418', '#2c1b12'], G);
   const soilH = H - gy;
   for (let y = gy; y < H; y++)
     for (let x = 0; x < W; x++) {
@@ -332,8 +393,8 @@ export function buildBackdrop(W: number, H: number, gy: number, stops: [string, 
         px[i] = soil[Math.min(soil.length - 1, Math.floor(k * (soil.length - 1) + bayer(x, y) + (noise2(x * 0.2, y * 0.6, 9) - 0.5) * 0.6))];
       }
     }
-  // pebbles, lit from above
-  const [pd, pm, pl] = gradeAll(['#4a4038', '#7a6c60', '#a89a8a'], G);
+  // pebbles, lit from above (on a beach, pale shells)
+  const [pd, pm, pl] = gradeAll(land.beach ? ['#b08870', '#e8d0c0', '#fff6ee'] : ['#4a4038', '#7a6c60', '#a89a8a'], G);
   const stones = Math.round((W * soilH) / 70);
   for (let s = 0; s < stones; s++) {
     const sx = h2(s, 301) * W, sy = gy + 5 + h2(s, 302) * (soilH - 5), rx = 0.7 + h2(s, 303) * 1.8 * Math.max(1, sc), ry = rx * 0.7;
@@ -643,6 +704,20 @@ function drawLandmark(
       }
       rect(x - u, yb - 3 * u, 2 * u, 3 * u, dark);
       for (let k = 0; k < 3; k++) rect(x + Math.round(Math.sin(k * 1.6) * u), yb - hh - (2 + 2 * k) * u, u, u, smoke);
+      break;
+    }
+    case 'bangka': {
+      // a bangka: a white outrigger boat with a blue stripe, bamboo floats and a little red canopy
+      const white = col('#f4f2ec'), blue = col('#2a6ab8'), bamboo = col('#c8a860'), bambooDk = col('#8a6a34'), red = col('#d0402e'), redLt = col('#e8644a');
+      row(8, 0, blue);
+      row(10, 1, white);
+      rect(x - 6 * u, yb - 3 * u, u, u, white); // the prows curve up
+      rect(x + 5 * u, yb - 3 * u, u, u, white);
+      rect(x - 9 * u, yb - 2 * u, 18 * u, thin, bambooDk); // the outrigger poles, out to its floats
+      for (const k of [-10, 7]) rect(x + k * u, yb - u, 3 * u, u, bamboo);
+      for (const k of [-2, 2]) rect(x + k * u, yb - 6 * u, thin, 4 * u, bambooDk); // the canopy's posts
+      row(7, 6, red);
+      row(5, 7, redLt);
       break;
     }
   }

@@ -261,7 +261,7 @@ const en = {
       body: 'Notes are locked before they leave your device — not even the admin can read them. Friends see your tree, never your words.',
     },
     { title: 'Visit friends’ trees', body: 'Open a friend’s tree from the menu to see how they’re growing, their progress squares and their lamp.' },
-    { title: `${trees} trees to choose from`, body: 'Oak, sakura, baobab, jacaranda and more, each standing in the land it comes from.' },
+    { title: `${trees} trees to choose from`, body: 'Oak, sakura, baobab, jacaranda, a coconut palm by the sea and more, each standing in the land it comes from.' },
     { title: 'Works offline', body: 'Install it on your phone or computer. Notes written without signal upload when you’re back online.' },
   ],
   landingCta: 'Plant your tree',
@@ -697,6 +697,7 @@ const tl: Strings = {
     ginkgo: { name: 'Ginkgo', blurb: 'Gintong dahong hugis-pamaypay mula sa sinaunang lahi.', land: 'silangang Tsina' },
     trumpet: { name: 'Rosas na Trumpeta', blurb: 'Biglang namumulaklak ng rosas ang mga hubad na sanga.', land: 'Brazil' },
     monkeypuzzle: { name: 'Monkey Puzzle', blurb: 'Matinik na sangang parang lubid mula pa sa panahon ng mga dinosaur.', land: 'Chile' },
+    coconut: { name: 'Niyog', blurb: 'Umiindayog na mga palapa at bunga ng niyog sa tabing-dagat.', land: 'mga tabing-dagat sa tropiko' },
   },
   nativeTo: (land) => `Katutubo sa ${land}`,
 
@@ -732,7 +733,7 @@ const tl: Strings = {
       title: 'Bisitahin ang puno ng mga kaibigan',
       body: 'Buksan ang puno ng isang kaibigan mula sa menu para makita ang kanilang paglago, mga parisukat ng progreso at lampara.',
     },
-    { title: `${trees} punong mapagpipilian`, body: 'Oak, sakura, baobab, jacaranda at iba pa, bawat isa nakatayo sa lupaing pinagmulan nito.' },
+    { title: `${trees} punong mapagpipilian`, body: 'Oak, sakura, baobab, jacaranda, niyog sa tabing-dagat at iba pa, bawat isa nakatayo sa lupaing pinagmulan nito.' },
     {
       title: 'Gumagana kahit offline',
       body: 'I-install ito sa iyong phone o computer. Ang mga talang isinulat nang walang signal ay maa-upload pagbalik mo online.',

@@ -106,12 +106,19 @@ const MONKEY = [
   ['m.mmmm.m.', 'mmffffmm.', '.mfofom..', '..mffm...', '..mmmm...', '..mccm...', '..mccm...', '..mmmm..t', '..m..m..t', '.mm..mmt.'],
 ];
 
+// a little red crab scuttling sideways on the sand, claws up, eyes on stalks
+const CRAB = [
+  ['c.......c', 'cc.e.e.cc', '.crrrrrc.', '..rrrrr..', '.l.l.l.l.'],
+  ['c.......c', 'cc.e.e.cc', '.crrrrrc.', '..rrrrr..', 'l.l...l.l'],
+];
+
 export interface Sprites {
   birds: Sprite[];
   squirrel: Sprite;
   raccoon: Sprite;
   deer: Sprite;
   monkey: Sprite;
+  crab: Sprite;
 }
 
 let cache: Sprites | null = null;
@@ -128,6 +135,7 @@ export function getSprites(): Sprites {
     raccoon: make(RACCOON, { g: '#8a8794', s: '#3a3542', m: '#2a2530', w: '#f1ece2', n: INK, e: '#5a5664' }),
     deer: make(DEER, { d: '#b07a48', w: '#ead7b4', a: '#e8d2a0', o: INK, n: INK, t: '#ffffff', k: '#3a2618' }),
     monkey: make(MONKEY, { m: '#6e4a2e', f: '#e2b98c', o: INK, c: '#c79a6a', t: '#6e4a2e' }),
+    crab: make(CRAB, { r: '#e0503a', c: '#c8382a', e: INK, l: '#a83020' }),
   };
   return cache;
 }
