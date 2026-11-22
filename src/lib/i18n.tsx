@@ -953,6 +953,8 @@ const tl: Strings = {
       'Kailangan ng pinakabagong server update (supabase/functions/account at 20261120000000_usernames.sql) para sa mga username — pakisabi sa admin na i-set up ito.',
     'Profile icons need the latest database update (supabase/migrations/20261121000000_avatars.sql) — ask the admin to run it.':
       'Kailangan ng pinakabagong database update (supabase/migrations/20261121000000_avatars.sql) para sa mga icon — pakisabi sa admin na patakbuhin ito.',
+    'Profile icons need a database fix (supabase/migrations/20261122000001_avatar_check_fix.sql) — ask the admin to run it.':
+      'Kailangan ng database fix (supabase/migrations/20261122000001_avatar_check_fix.sql) para sa mga icon — pakisabi sa admin na patakbuhin ito.',
     'Choosing a tree needs the latest database update (supabase/migrations) — ask the admin to run it.':
       'Kailangan ng pinakabagong database update (supabase/migrations) para makapili ng puno — pakisabi sa admin na patakbuhin ito.',
     "You're offline and this browser couldn't keep the note. Copy it somewhere safe and try again when you're online.":

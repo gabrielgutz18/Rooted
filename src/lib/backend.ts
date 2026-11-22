@@ -141,6 +141,7 @@ const NEEDS_SHARING =
   'Pinning a note needs the latest database update (supabase/migrations/20261122000000_shared_notes.sql) — ask the admin to run it.';
 const NOT_PINNABLE = "That note can't be pinned yet — it's still waiting to upload.";
 const NEEDS_AVATARS = 'Profile icons need the latest database update (supabase/migrations/20261121000000_avatars.sql) — ask the admin to run it.';
+const NEEDS_AVATAR_FIX = 'Profile icons need a database fix (supabase/migrations/20261122000001_avatar_check_fix.sql) — ask the admin to run it.';
 const TAKEN = 'That username is taken.';
 const WRONG_LOGIN = 'Wrong username or password.';
 const LOCKED_SUBJECT = 'locked'; // what the database holds in place of a locked note's subject
@@ -455,6 +456,8 @@ function cloud(): Backend {
       const { id } = await me();
       const { error } = await sb.from('profiles').update({ avatar }).eq('id', id);
       if (error) {
+        // the value already passed isAvatarValue, so a failed check means the database's check is out of date
+        if (error.code === '23514' || /profiles_avatar_name/.test(error.message)) throw new Error(NEEDS_AVATAR_FIX);
         if (error.code === '42703' || /\bavatar\b/.test(error.message)) throw new Error(NEEDS_AVATARS);
         throw error;
       }
