@@ -19,6 +19,7 @@ test('the menu opens the developer page, and Back returns with the note still wr
   await expect(page.getByText('Trial mode · this browser only')).toBeVisible();
   await noteBox(page).fill('Half a thought about Sunday…');
 
+  await page.getByRole('button', { name: /^More/ }).click(); // it's in the menu's More folder
   await page.getByRole('button', { name: 'About the developer' }).click();
   await expect(page).toHaveURL(/\/developer$/);
   await expect(page.getByRole('heading', { level: 1, name: 'Hi, I’m Gabriel' })).toBeVisible();

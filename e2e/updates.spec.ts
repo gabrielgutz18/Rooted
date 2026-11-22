@@ -16,6 +16,10 @@ async function open(page: Page, trial = 'Trial mode · this browser only') {
 
 test('the update notice opens as a scroll, with pictures, and stops saying New once read', async ({ page }) => {
   await open(page);
+  // Updates is in the menu's More folder, which says New while it's shut
+  const folder = page.getByRole('button', { name: /^More/ });
+  await expect(folder.locator('.new-tag')).toHaveText('New');
+  await folder.click();
   const link = page.getByRole('button', { name: /^Updates/ });
   await expect(link.locator('.new-tag')).toHaveText('New');
 
@@ -82,6 +86,7 @@ test('on a phone the scroll fits and the menu shows a dot for new updates', asyn
   await open(page);
   await expect(page.locator('.menu-btn .new-dot')).toBeVisible();
   await page.locator('.menu-btn').click();
+  await page.getByRole('button', { name: /^More/ }).click();
   await page.getByRole('button', { name: /^Updates/ }).click();
   const scroll = page.getByRole('dialog', { name: 'What’s new in Rooted' });
   await expect(scroll).toBeVisible();
@@ -99,6 +104,7 @@ test('on a phone the scroll fits and the menu shows a dot for new updates', asyn
 test('the notice reads in Tagalog too', async ({ page }) => {
   await page.addInitScript(() => localStorage.setItem('rooted.lang', 'tl'));
   await open(page, 'Trial mode · sa browser na ito lang');
+  await page.getByRole('button', { name: /^Iba pa/ }).click();
   await page.getByRole('button', { name: /^Mga update/ }).click();
   const scroll = page.getByRole('dialog', { name: 'Ano ang bago sa Rooted' });
   await expect(scroll.getByRole('heading', { name: 'Dinadalaw ni Hesus ang iyong puno', exact: true })).toBeVisible();

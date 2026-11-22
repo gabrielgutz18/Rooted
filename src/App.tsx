@@ -18,6 +18,7 @@ import UsernameDialog from './components/UsernameDialog';
 import ProfilePanel from './components/ProfilePanel';
 import { PinnedNote } from './components/SharedNote';
 import { Avatar } from './components/Avatar';
+import MenuFolder, { useFolderOpen } from './components/MenuFolder';
 import { speciesOf } from './scene/species';
 import { isStandalone, useInstall } from './lib/install';
 import Landing from './pages/landing';
@@ -485,6 +486,8 @@ function Garden({ userId, hidden }: { userId: string; hidden: boolean }) {
   // the lamp and the leaves, for whichever tree is showing
   const shownStreak = visiting ? (visitDays ? dayStreak(visitDays) : undefined) : loading ? undefined : myStreak;
   const lastDay = visiting ? (visitDays ? lastDayOf(visitDays) : dayOf(visiting.last_entry_at)) : lastDayOf(myDays);
+  // Menu → More: the links used now and then, in a folder (open while the admin page shows)
+  const [moreOpen, toggleMore] = useFolderOpen(view.kind === 'admin');
 
   return (
     <div className="shell" hidden={hidden}>
@@ -554,48 +557,56 @@ function Garden({ userId, hidden }: { userId: string; hidden: boolean }) {
               >
                 {t.chooseTree} · <span className="side-link-meta">{t.species[speciesOf(me?.tree).id].name}</span>
               </button>
-              <button
-                className="side-link"
-                onClick={() => {
-                  setMenuOpen(false);
-                  setUpdatesOpen(true);
-                  markUpdatesSeen();
-                  setUpdateUnseen(false);
-                }}
+              <MenuFolder
+                id="side-more"
+                label={t.moreMenu}
+                open={moreOpen}
+                onToggle={toggleMore}
+                badge={updateUnseen && <span className="new-tag">{t.updatesNew}</span>}
               >
-                {t.updatesMenu}
-                {updateUnseen && <span className="new-tag">{t.updatesNew}</span>}
-              </button>
-              {!install.installed && (
-                <button className="side-link" onClick={installApp}>
-                  {t.installApp}
-                </button>
-              )}
-              {cloud && open && (
                 <button
-                  className="side-link"
+                  className="side-sub"
                   onClick={() => {
                     setMenuOpen(false);
-                    setRecovery({ code: null });
+                    setUpdatesOpen(true);
+                    markUpdatesSeen();
+                    setUpdateUnseen(false);
                   }}
                 >
-                  {t.recoveryMenu}
+                  {t.updatesMenu}
+                  {updateUnseen && <span className="new-tag">{t.updatesNew}</span>}
                 </button>
-              )}
-              {me?.is_admin && (
-                <button className={`side-link ${view.kind === 'admin' ? 'is-on' : ''}`} onClick={() => go({ kind: 'admin' })}>
-                  {t.adminUsers}
+                {!install.installed && (
+                  <button className="side-sub" onClick={installApp}>
+                    {t.installApp}
+                  </button>
+                )}
+                {cloud && open && (
+                  <button
+                    className="side-sub"
+                    onClick={() => {
+                      setMenuOpen(false);
+                      setRecovery({ code: null });
+                    }}
+                  >
+                    {t.recoveryMenu}
+                  </button>
+                )}
+                {me?.is_admin && (
+                  <button className={`side-sub ${view.kind === 'admin' ? 'is-on' : ''}`} onClick={() => go({ kind: 'admin' })}>
+                    {t.adminUsers}
+                  </button>
+                )}
+                <button
+                  className="side-sub"
+                  onClick={() => {
+                    closeMenu();
+                    navigate('developer');
+                  }}
+                >
+                  {t.developerMenu}
                 </button>
-              )}
-              <button
-                className="side-link"
-                onClick={() => {
-                  closeMenu();
-                  navigate('developer');
-                }}
-              >
-                {t.developerMenu}
-              </button>
+              </MenuFolder>
             </nav>
             <h2 className="side-title">{t.friends}</h2>
             <ul className="friend-list">
