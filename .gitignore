@@ -29,3 +29,5 @@ Thumbs.db
 
 # admin-only SQL notes (usernames, owner-level scripts) — keep local
 supabase/sqleditor.md   
+# Facebook post pictures (kept on this computer only)
+facebook post/
