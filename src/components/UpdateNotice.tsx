@@ -1,4 +1,5 @@
-// Menu → Updates: what's new, written as a letter on a scroll that unrolls.
+// Menu → Updates: what's new, written as a letter on a scroll that unrolls. A new update also
+// opens it by itself, once, when the app opens (src/App.tsx).
 // The landing page opens it too, at the notice a visitor picked (src/pages/landing-updates.tsx).
 
 import { useEffect, useLayoutEffect, useRef } from 'react';

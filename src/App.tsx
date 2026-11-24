@@ -28,6 +28,7 @@ import { clearSnapshots, readSnapshot, writeSnapshot } from './lib/cache';
 import { addToOutbox, asEntry, clearOutbox, editInOutbox, isOffline, readOutbox, removeFromOutbox, withPending, withTimeout } from './lib/outbox';
 import { previewVisit, useVisit, VISIT_MULTIPLIER } from './lib/visit';
 import { useVisitText } from './components/Visitor';
+import { applyOp, applyOps, clearDeskOps, emptyDesk, keepDeskOps, loadDeskOps, readDesk, type Desk, type DeskOp } from './lib/folders';
 
 const cloud = backend.mode === 'cloud';
 
@@ -149,6 +150,12 @@ function Garden({ userId, hidden }: { userId: string; hidden: boolean }) {
   const [lockedDays, setLockedDays] = useState<DayStat[]>([]); // progress squares while locked
   const [recovery, setRecovery] = useState<{ code: string | null } | null>(null);
   const closeRecovery = useCallback(() => setRecovery(null), []);
+  // Note folders (src/lib/folders.ts). `deskBase` is the desk as last loaded or saved; changes
+  // not saved yet wait in `deskOps` (and on this device), and what shows is the two together.
+  const deskBase = useRef<Desk>(snap?.desk ? readDesk(snap.desk) : emptyDesk());
+  const deskOps = useRef<DeskOp[]>(loadDeskOps(userId));
+  const deskBusy = useRef(false);
+  const [desk, setDesk] = useState<Desk>(() => applyOps(deskBase.current, deskOps.current));
 
   const loadPeople = useCallback(() => backend.listProfiles().then(setPeople), []);
 
@@ -162,6 +169,46 @@ function Garden({ userId, hidden }: { userId: string; hidden: boolean }) {
       }),
     [userId],
   );
+
+  const loadDesk = useCallback(
+    () =>
+      backend.desk().then((d) => {
+        deskBase.current = d;
+        setDesk(applyOps(d, deskOps.current));
+      }),
+    [],
+  );
+
+  /**
+   * Save folder changes: load the desk, apply the waiting changes, save it. Loading first
+   * keeps changes made on another device in between. Offline they wait; safe to call often.
+   */
+  const flushDesk = useCallback(async () => {
+    if (deskBusy.current || locked.current || !deskOps.current.length) return;
+    if (cloud && navigator.onLine === false) return;
+    deskBusy.current = true;
+    try {
+      while (deskOps.current.length) {
+        const ops = deskOps.current;
+        const next = applyOps(await withTimeout(backend.desk(), 15000), ops);
+        await withTimeout(backend.saveDesk(next), 15000);
+        deskBase.current = next;
+        deskOps.current = deskOps.current.slice(ops.length); // keep any made while saving
+        keepDeskOps(userId, deskOps.current);
+        setDesk(applyOps(next, deskOps.current));
+      }
+    } catch (err) {
+      if (!(cloud && isOffline(err))) {
+        // refused (e.g. the folders update isn't run yet): show what is really saved
+        deskOps.current = [];
+        keepDeskOps(userId, []);
+        setDesk(deskBase.current);
+        setError(message(err));
+      }
+    } finally {
+      deskBusy.current = false;
+    }
+  }, [userId]);
 
   /** Upload notes written offline, oldest first. Safe to call often. */
   const syncNow = useCallback(async () => {
@@ -204,6 +251,10 @@ function Garden({ userId, hidden }: { userId: string; hidden: boolean }) {
       locked.current = !s.open;
       if (s.open) {
         if (s.recoveryKey) setRecovery({ code: s.recoveryKey }); // just made at sign-up: show it once
+        // folders are extra: if they can't load, the last-seen copy stays
+        loadDesk()
+          .then(flushDesk)
+          .catch(() => {});
         return loadNotes();
       }
       // can't read the notes here yet: show the tree and squares from the server's counts
@@ -218,13 +269,16 @@ function Garden({ userId, hidden }: { userId: string; hidden: boolean }) {
       .then(() => syncNow())
       .catch((err) => setError(snap ? strings().showingCached : message(err)))
       .finally(() => setLoading(false));
-  }, [userId, loadPeople, loadNotes, snap, syncNow]);
+  }, [userId, loadPeople, loadNotes, loadDesk, flushDesk, snap, syncNow]);
 
   function unlocked(recoveryKey: string | null) {
     setLock({ open: true, recoveryKey: null });
     locked.current = false;
     if (recoveryKey) setRecovery({ code: recoveryKey });
     setLoading(true);
+    loadDesk()
+      .then(flushDesk)
+      .catch(() => {});
     loadNotes()
       .then(() => syncNow())
       .catch((err) => setError(message(err)))
@@ -235,20 +289,24 @@ function Garden({ userId, hidden }: { userId: string; hidden: boolean }) {
   // reopened, and every half minute
   useEffect(() => {
     if (!cloud) return;
-    const onVisible = () => document.visibilityState === 'visible' && syncNow();
-    window.addEventListener('online', syncNow);
+    const sync = () => {
+      void syncNow();
+      void flushDesk();
+    };
+    const onVisible = () => document.visibilityState === 'visible' && sync();
+    window.addEventListener('online', sync);
     document.addEventListener('visibilitychange', onVisible);
-    const t = setInterval(syncNow, 30000);
+    const t = setInterval(sync, 30000);
     return () => {
-      window.removeEventListener('online', syncNow);
+      window.removeEventListener('online', sync);
       document.removeEventListener('visibilitychange', onVisible);
       clearInterval(t);
     };
-  }, [syncNow]);
+  }, [syncNow, flushDesk]);
 
   useEffect(() => {
-    if (cloud && me) writeSnapshot(userId, { me, entries, people, pin: myPin });
-  }, [userId, me, entries, people, myPin]);
+    if (cloud && me) writeSnapshot(userId, { me, entries, people, pin: myPin, desk });
+  }, [userId, me, entries, people, myPin, desk]);
 
   useEffect(() => {
     if (!notice) return;
@@ -261,6 +319,7 @@ function Garden({ userId, hidden }: { userId: string; hidden: boolean }) {
     if (waiting && !window.confirm(t.signOutConfirm(waiting))) return;
     clearSnapshots();
     clearOutbox(userId);
+    clearDeskOps(userId);
     backend.signOut();
   }
 
@@ -338,6 +397,17 @@ function Garden({ userId, hidden }: { userId: string; hidden: boolean }) {
   // Accounts made with an email before usernames pick one once (null: not yet; undefined:
   // the usernames migration isn't run, so don't ask). The admin keeps the email.
   const needsName = !!me && !me.is_admin && me.username === null && !nameLater;
+
+  // A new update opens by itself, once, as the garden opens (signing in, or opening the app),
+  // after whatever asks first: a username, the first tree, the recovery key, or another page
+  // (it waits until the tree is showing). A brand-new account skips it, since everything is
+  // new to them, and is shown the next one.
+  useEffect(() => {
+    if (!updateUnseen || !me || hidden || needsName || picking || recovery || installHelp) return;
+    markUpdatesSeen();
+    setUpdateUnseen(false);
+    if (me.tree != null) setUpdatesOpen(true);
+  }, [updateUnseen, me, hidden, needsName, picking, recovery, installHelp]);
 
   /** A username added (older email accounts) or changed; the display name may follow it. */
   function namePicked(username: string, displayName?: string) {
@@ -452,16 +522,35 @@ function Garden({ userId, hidden }: { userId: string; hidden: boolean }) {
     }
   }
 
+  /** A change to your folders: shown straight away, saved in the background (see flushDesk). */
+  function changeDesk(op: DeskOp, quiet = false) {
+    deskOps.current = [...deskOps.current, op];
+    keepDeskOps(userId, deskOps.current);
+    setDesk((d) => applyOp(d, op));
+    void flushDesk();
+    if (quiet) return;
+    if (op.kind === 'move') {
+      const to = op.folder ? desk.folders.find((f) => f.id === op.folder) : null;
+      setNotice(to ? t.movedTo(to.name) : t.movedToDesk);
+    } else if (op.kind === 'remove') {
+      const gone = desk.folders.find((f) => f.id === op.id);
+      if (gone) setNotice(t.folderDeleted(gone.name));
+    }
+  }
+
   async function remove(id: string) {
+    const filed = id in desk.placed; // a deleted note leaves its folder too
     if (entries.find((e) => e.id === id)?.pending) {
       removeFromOutbox(userId, id);
       setEntries((list) => list.filter((e) => e.id !== id));
+      if (filed) changeDesk({ kind: 'move', note: id, folder: null }, true);
       return;
     }
     try {
       await backend.removeEntry(id);
       setEntries((list) => list.filter((e) => e.id !== id));
       setMyPin((p) => (p?.entry_id === id ? null : p)); // a deleted note is unpinned with it
+      if (filed) changeDesk({ kind: 'move', note: id, folder: null }, true);
     } catch (err) {
       setError(message(err));
     }
@@ -696,6 +785,8 @@ function Garden({ userId, hidden }: { userId: string; hidden: boolean }) {
                   pinnedId={myPin?.entry_id ?? null}
                   onPin={pinNote}
                   onUnpin={unpinNote}
+                  desk={desk}
+                  onDesk={changeDesk}
                 />
               )}
             </>

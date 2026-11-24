@@ -1,4 +1,5 @@
 import { defineConfig, devices } from '@playwright/test';
+import { updatesRead } from './e2e/storage';
 
 // The landing page and its pictures, on a dev server of their own (trial mode, like
 // playwright.config.ts), so they can run while the main suite is running:
@@ -22,6 +23,7 @@ export default defineConfig({
     channel: 'chrome',
     trace: 'retain-on-failure',
     screenshot: 'only-on-failure',
+    storageState: updatesRead(PORT), // the newest update already read (see e2e/storage.ts)
   },
   projects: [
     {

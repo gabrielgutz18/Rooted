@@ -7,6 +7,7 @@ import { storedUser, supabase } from './supabase';
 import { dayStats, type DayStat } from './growth';
 import * as vault from './vault';
 import { isAvatarValue } from './avatars';
+import { emptyDesk, readDesk, type Desk } from './folders';
 import { isOffline, withTimeout } from './outbox';
 import { BAD_USERNAME, USERNAME_DOMAIN, isValidUsername, loginEmail, normalizeUsername, usernameEmail } from './username';
 import { BAD_NAME, cleanName } from './names';
@@ -123,6 +124,10 @@ export interface Backend {
   shareNote(entry: Entry): Promise<SharedNote>;
   /** Unpin: the readable copy is deleted. The note itself stays. */
   unshareNote(): Promise<void>;
+  /** Your note folders, locked like notes. Empty until you make one (and before that database update). */
+  desk(): Promise<Desk>;
+  /** Saves all your note folders at once, locked like notes. */
+  saveDesk(desk: Desk): Promise<void>;
   adminUsers(): Promise<AdminUser[]>;
   /** Waits for a sign-in that is still unlocking, then says whether notes can be read here. */
   noteLock(): Promise<NoteLock>;
@@ -142,6 +147,7 @@ const NEEDS_ACCOUNT_SERVER =
   'Usernames need the latest server update (supabase/functions/account and 20261120000000_usernames.sql) — ask the admin to set it up.';
 const NEEDS_SHARING =
   'Pinning a note needs the latest database update (supabase/migrations/20261122000000_shared_notes.sql) — ask the admin to run it.';
+const NEEDS_FOLDERS = 'Folders need the latest database update (supabase/migrations/20261123000000_note_folders.sql) — ask the admin to run it.';
 const NOT_PINNABLE = "That note can't be pinned yet — it's still waiting to upload.";
 const NEEDS_AVATARS = 'Profile icons need the latest database update (supabase/migrations/20261121000000_avatars.sql) — ask the admin to run it.';
 const NEEDS_AVATAR_FIX = 'Profile icons need a database fix (supabase/migrations/20261122000001_avatar_check_fix.sql) — ask the admin to run it.';
@@ -151,6 +157,9 @@ const WRONG_LOGIN = 'Wrong username or password.';
 const LOCKED_SUBJECT = 'locked'; // what the database holds in place of a locked note's subject
 
 // ---------------- cloud ----------------
+
+/** What a locked desk is bound to, so it can't be passed off as anything else. */
+const deskLabel = (userId: string) => `rooted:desk:${userId}`;
 
 const WRONG_PASSWORD = "That password doesn't open your notes. If it was changed or reset, use your recovery key instead.";
 
@@ -575,6 +584,29 @@ function cloud(): Backend {
       const { error } = await sb.from('shared_notes').delete().eq('user_id', id);
       if (error && !missing(error)) throw error;
     },
+    async desk() {
+      const key = await noteKey();
+      const { id } = await me();
+      const { data, error } = await sb.from('note_desks').select('sealed').eq('user_id', id).maybeSingle();
+      if (error) {
+        if (missing(error)) return emptyDesk(); // nobody can have made a folder yet
+        throw error;
+      }
+      if (!data) return emptyDesk();
+      try {
+        return readDesk(await vault.unsealData(key, deskLabel(id), (data as { sealed: string }).sealed));
+      } catch {
+        return emptyDesk(); // locked with a note key this account no longer has (it started over)
+      }
+    },
+    async saveDesk(desk) {
+      const key = await noteKey();
+      const { id } = await me();
+      // the database only ever sees locked text: not a folder's name, nor which note is in it
+      const sealed = await vault.sealData(key, deskLabel(id), desk);
+      const { error } = await sb.from('note_desks').upsert({ user_id: id, sealed }, { onConflict: 'user_id' });
+      if (error) throw missing(error) ? new Error(NEEDS_FOLDERS) : error;
+    },
     async adminUsers() {
       const { data, error } = await sb.rpc('admin_list_users');
       if (error) throw error;
@@ -639,6 +671,8 @@ interface LocalDB {
   session: string | null;
   /** each person's pinned note, by user id */
   shared?: Record<string, SharedNote>;
+  /** each person's note folders, by user id */
+  desks?: Record<string, Desk>;
 }
 
 const KEY = 'rooted.v2';
@@ -848,6 +882,15 @@ function local(): Backend {
       const db = read();
       const owner = me(db);
       if (db.shared) delete db.shared[owner];
+      write(db);
+    },
+    async desk() {
+      const db = read();
+      return readDesk(db.desks?.[me(db)]);
+    },
+    async saveDesk(desk) {
+      const db = read();
+      db.desks = { ...db.desks, [me(db)]: desk };
       write(db);
     },
     async adminUsers() {

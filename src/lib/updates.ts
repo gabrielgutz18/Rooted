@@ -1,5 +1,6 @@
 // The update notices shown in Menu → Updates, newest first. To announce something new,
-// add an entry at the top with a new `id`: everyone who hasn't opened it yet sees "New".
+// add an entry at the top with a new `id`: it opens by itself, once, the next time each member
+// opens the app or signs in (src/App.tsx), and shows as "New" in the menu until it's been read.
 // Screenshots live in src/assets/updates/ (most come from the e2e tests' screenshots).
 
 import type { Lang } from './i18n';
@@ -45,6 +46,9 @@ import jesusSeedClose from '../assets/updates/jesus-seed-close.png';
 import jesusPalmClose from '../assets/updates/jesus-palm-close.png';
 import jesusNote3x from '../assets/updates/jesus-note-3x.png';
 import landCoconut from '../assets/updates/land-coconut.png';
+import noteFolders from '../assets/updates/note-folders.png';
+import folderOpen from '../assets/updates/folder-open.png';
+import folderIcons from '../assets/updates/folder-icons.png';
 
 type Text = Record<Lang, string>;
 
@@ -75,6 +79,72 @@ const days = (n: number): Text => ({ en: `${n} ${n === 1 ? 'day' : 'days'}`, tl:
 const cap = (s: string) => s[0].toUpperCase() + s.slice(1);
 
 export const UPDATES: Update[] = [
+  {
+    id: '2026-11-24-note-folders',
+    date: '2026-11-24',
+    title: { en: 'Folders for your notes', tl: 'Mga folder para sa iyong mga tala' },
+    intro: {
+      en: 'My notes is now a little desktop. Make pixel folders, give each one a name, a color and a little icon, and keep related notes together: your evangelism notes in “Evangelism”, your prayers in “Prayer”.',
+      tl: 'Isa nang maliit na desktop ang Aking mga tala. Gumawa ng mga pixel na folder, bigyan ang bawat isa ng pangalan, kulay at maliit na icon, at pagsama-samahin ang magkakaugnay na tala: ang mga tala mo sa ebanghelismo sa “Ebanghelismo”, ang iyong mga panalangin sa “Panalangin”.',
+    },
+    sections: [
+      {
+        heading: { en: 'Hold a note, drag it in', tl: 'Pindutin nang matagal ang tala, i-drag ito papasok' },
+        text: {
+          en: 'Press New folder above your notes and type a name. Then press and hold a note until it lifts, and drag it onto a folder, with a mouse or a finger. A folder with notes in it has paper sticking out, and its number says how many.',
+          tl: 'Pindutin ang Bagong folder sa itaas ng iyong mga tala at mag-type ng pangalan. Saka pindutin nang matagal ang isang tala hanggang umangat ito, at i-drag ito sa isang folder, gamit ang mouse o daliri. May papel na nakausli sa folder na may laman, at sinasabi ng numero nito kung ilan.',
+        },
+        pictures: [
+          {
+            src: noteFolders,
+            alt: {
+              en: 'My notes with a blue Evangelism folder with a fish on it holding 2 notes, a lavender Prayer folder with a dove holding 1, and a New folder tile',
+              tl: 'Ang Aking mga tala na may asul na folder na Evangelism na may isda at 2 tala, lavender na folder na Prayer na may kalapati at 1 tala, at ang Bagong folder',
+            },
+          },
+        ],
+      },
+      {
+        heading: { en: '18 colors and 19 icons', tl: '18 kulay at 19 na icon' },
+        text: {
+          en: 'Give each folder its own look. Press New folder, or open a folder you already have and press Edit in its title bar. Under the name, pick a little picture for its front (a cross, a Bible, a dove, a fish, a church, the world, music, a flame and more), then a color. Every color shows your icon, so you can see how it will look before you save.',
+          tl: 'Bigyan ang bawat folder ng sariling itsura. Pindutin ang Bagong folder, o buksan ang folder na mayroon ka na at pindutin ang I-edit sa title bar nito. Sa ilalim ng pangalan, pumili ng maliit na larawan para sa harap nito (krus, Bibliya, kalapati, isda, simbahan, mundo, musika, apoy at marami pa), saka ng kulay. Makikita ang icon mo sa bawat kulay, kaya alam mo na ang itsura nito bago mo i-save.',
+        },
+        pictures: [
+          {
+            src: folderIcons,
+            alt: {
+              en: 'Editing a folder: a row of 20 icon choices with the globe picked, and under it 18 colored folders to choose from, each showing the globe',
+              tl: 'Pag-edit ng folder: 20 pagpipiliang icon na napili ang mundo, at sa ilalim nito ang 18 makukulay na folder na pagpipilian, bawat isa ay may mundo',
+            },
+          },
+        ],
+      },
+      {
+        heading: { en: 'Open a folder like a window', tl: 'Buksan ang folder na parang window' },
+        text: {
+          en: 'Tap a folder to see its notes in a window of its color. Edit changes its name, color or icon. To take a note out, drag it to Back to desktop, or press Move on any note instead of dragging. Deleting a folder never deletes notes: they go back to the desktop. Search still looks through every note and shows which folder each one is in.',
+          tl: 'Pindutin ang isang folder para makita ang mga tala nito sa isang window na kakulay nito. Sa I-edit, mapapalitan ang pangalan, kulay o icon nito. Para ilabas ang isang tala, i-drag ito sa Ibalik sa desktop, o pindutin ang Ilipat sa kahit anong tala sa halip na mag-drag. Hindi kailanman nabubura ang mga tala kapag binura ang folder: babalik sila sa desktop. Hinahanap pa rin ng Search ang bawat tala at ipinapakita kung saang folder ito nakalagay.',
+        },
+        pictures: [
+          {
+            src: folderOpen,
+            alt: {
+              en: 'The Evangelism folder open as a blue window with its two notes inside',
+              tl: 'Ang folder na Evangelism na bukas bilang asul na window, kasama ang dalawang tala nito',
+            },
+          },
+        ],
+      },
+      {
+        heading: { en: 'Private, like your notes', tl: 'Pribado, gaya ng iyong mga tala' },
+        text: {
+          en: 'Folder names, and which note is in which folder, are locked on your device before they are saved, so nobody else can read them: not friends, and not the admin. They follow you to every device where you unlock your notes.',
+          tl: 'Naka-lock sa iyong device ang mga pangalan ng folder, at kung aling tala ang nasa aling folder, bago ito i-save, kaya walang ibang makakabasa: hindi ang mga kaibigan, at hindi ang admin. Susunod ang mga ito sa bawat device kung saan mo binubuksan ang iyong mga tala.',
+        },
+      },
+    ],
+  },
   {
     id: '2026-11-22-jesus-visits',
     date: '2026-11-22',

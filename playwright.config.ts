@@ -1,4 +1,5 @@
 import { defineConfig, devices } from '@playwright/test';
+import { updatesRead } from './e2e/storage';
 
 // Browser tests run against their own dev servers, never the real database:
 //  - trial mode (most tests): the Supabase keys in .env.local are overridden for this server
@@ -18,6 +19,7 @@ export default defineConfig({
     channel: 'chrome', // the Chrome already installed on this computer (no browser download)
     trace: 'retain-on-failure',
     screenshot: 'only-on-failure',
+    storageState: updatesRead(PORT, OFFLINE_PORT), // the newest update already read (see e2e/storage.ts)
   },
   projects: [
     {

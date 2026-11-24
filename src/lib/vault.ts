@@ -254,6 +254,25 @@ export async function unseal(key: CryptoKey, id: string, sealed: string): Promis
   return { subject: String(s.subject ?? ''), note: String(s.note ?? ''), tags: Array.isArray(s.tags) ? s.tags.map(String) : [] };
 }
 
+/**
+ * Locks any other private data (like your note folders) with the note key. `label` says what
+ * it is and whose, so a locked value can't be passed off as something else.
+ */
+export async function sealData(key: CryptoKey, label: string, value: unknown): Promise<string> {
+  const iv = random(12);
+  const body = enc.encode(JSON.stringify(value));
+  const sealed = new Uint8Array(await crypto.subtle.encrypt({ name: 'AES-GCM', iv, additionalData: enc.encode(label) }, key, body));
+  return `v1.${toB64(join(iv, sealed))}`;
+}
+
+/** Throws when it was locked with a different key or label, or was tampered with. */
+export async function unsealData(key: CryptoKey, label: string, sealed: string): Promise<unknown> {
+  if (!sealed.startsWith('v1.')) throw new Error('Unknown format');
+  const bytes = fromB64(sealed.slice(3));
+  const body = await crypto.subtle.decrypt({ name: 'AES-GCM', iv: bytes.slice(0, 12), additionalData: enc.encode(label) }, key, bytes.slice(12));
+  return JSON.parse(dec.decode(body));
+}
+
 // ---------------- the note key on this device ----------------
 
 const DB = 'rooted-keys';

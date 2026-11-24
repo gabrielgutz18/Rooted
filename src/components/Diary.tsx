@@ -4,6 +4,9 @@ import { errorText, tagName, useT, type Strings } from '../lib/i18n';
 import { backend, type Entry, type EntryEdit, type EntryInput } from '../lib/backend';
 import { checkNote, noteLimit, NOTES_PER_DAY, type LimitIssue, type NoteIssue } from '../lib/spam';
 import { BlessedTag } from './Visitor';
+import { MAX_FOLDERS, newFolderId, type Desk, type DeskOp } from '../lib/folders';
+import { useHoldDrag } from '../lib/drag';
+import { FolderBar, FolderChip, FolderForm, FolderGrid, MoveChooser, NoteGhost } from './Folders';
 
 const partLabel = (t: Strings, p: Part) =>
   p.kind === 'show'
@@ -262,6 +265,8 @@ export function Notes({
   pinnedId,
   onPin,
   onUnpin,
+  desk,
+  onDesk,
 }: {
   entries: Entry[];
   loading: boolean;
@@ -271,9 +276,46 @@ export function Notes({
   pinnedId?: string | null;
   onPin?(entry: Entry): Promise<void>;
   onUnpin?(): Promise<void>;
+  /** your folders (src/lib/folders.ts); without them the notes are one plain list */
+  desk?: Desk;
+  onDesk?(op: DeskOp): void;
 }) {
   const t = useT();
   const [query, setQuery] = useState('');
+  // folders: the one open (its notes show in a window), the make/edit form, "move to…" on a note
+  const [folderOpen, setFolderOpen] = useState<string | null>(null);
+  const [form, setForm] = useState<{ edit: string | null } | null>(null);
+  const [moveAsk, setMoveAsk] = useState<string | null>(null);
+  const [bounce, setBounce] = useState<string | null>(null); // a folder that just got a note
+  const filing = !!desk && !!onDesk;
+  const folders = useMemo(() => desk?.folders ?? [], [desk]);
+  const placed = useMemo(() => desk?.placed ?? {}, [desk]);
+  const folderById = useMemo(() => new Map(folders.map((f) => [f.id, f])), [folders]);
+  const counts = useMemo(() => {
+    const c: Record<string, number> = {};
+    for (const e of entries) {
+      const f = placed[e.id];
+      if (f) c[f] = (c[f] ?? 0) + 1;
+    }
+    return c;
+  }, [entries, placed]);
+  const current = folderOpen ? (folderById.get(folderOpen) ?? null) : null; // gone if deleted elsewhere
+  const formFolder = form?.edit ? (folderById.get(form.edit) ?? null) : null;
+
+  function move(noteId: string, folder: string | null) {
+    setMoveAsk(null);
+    if (!onDesk || (placed[noteId] ?? null) === folder) return;
+    onDesk({ kind: 'move', note: noteId, folder });
+    if (folder) setBounce(folder);
+  }
+  const { drag, start, zone } = useHoldDrag((id, target) => move(id, target === 'desk' ? null : target));
+  const dragged = drag ? entries.find((e) => e.id === drag.id) : undefined;
+
+  useEffect(() => {
+    if (!bounce) return;
+    const timer = setTimeout(() => setBounce(null), 700);
+    return () => clearTimeout(timer);
+  }, [bounce]);
   const [confirm, setConfirm] = useState<string | null>(null);
   const [pinAsk, setPinAsk] = useState<string | null>(null); // "share it with everyone?" on this note
   const [pinBusy, setPinBusy] = useState(false);
@@ -291,16 +333,18 @@ export function Notes({
     [t.locale],
   );
 
+  const searching = query.trim() !== '';
   const visible = useMemo(() => {
     const q = query.trim().toLowerCase();
-    if (!q) return entries;
-    // tags match in either language
+    // not searching: the notes in the open folder, or the ones on the desktop
+    if (!q) return filing ? entries.filter((e) => (placed[e.id] ?? null) === (current?.id ?? null)) : entries;
+    // searching looks through every note, in every folder; tags match in either language
     return entries.filter((e) => `${e.subject} ${e.note} ${e.tags.join(' ')} ${e.tags.map((g) => tagName(t, g)).join(' ')}`.toLowerCase().includes(q));
-  }, [entries, query, t]);
+  }, [entries, query, t, filing, placed, current]);
   const waiting = entries.filter((e) => e.pending).length;
 
   return (
-    <section className="px-panel" aria-labelledby="notes-title">
+    <section className="px-panel" aria-labelledby="notes-title" ref={filing ? zone : undefined}>
       <div className="composer-head">
         <h2 id="notes-title" className="panel-title">
           {t.myNotes}
@@ -313,7 +357,60 @@ export function Notes({
       {entries.length > 3 && (
         <input className="search" type="search" placeholder={t.searchNotes} value={query} onChange={(e) => setQuery(e.target.value)} aria-label={t.searchLabel} />
       )}
-      {loading ? (
+      {filing && (
+        <FolderGrid
+          desk={desk!}
+          counts={counts}
+          openId={searching ? null : (current?.id ?? null)}
+          drag={drag}
+          draggedFrom={drag ? (placed[drag.id] ?? null) : null}
+          bounce={bounce}
+          canAdd={folders.length < MAX_FOLDERS}
+          onOpen={(id) => {
+            setQuery('');
+            setFolderOpen(id);
+            setForm(null);
+          }}
+          onNew={() => setForm({ edit: null })}
+        />
+      )}
+      {filing && form && (
+        <FolderForm
+          key={form.edit ?? 'new'}
+          folder={formFolder ?? undefined}
+          count={formFolder ? (counts[formFolder.id] ?? 0) : 0}
+          onCancel={() => setForm(null)}
+          onSave={(name, color, icon) => {
+            if (formFolder) onDesk!({ kind: 'edit', id: formFolder.id, name, color, icon });
+            else onDesk!({ kind: 'add', folder: { id: newFolderId(), name, color, icon } });
+            setForm(null);
+          }}
+          onDelete={
+            formFolder
+              ? () => {
+                  onDesk!({ kind: 'remove', id: formFolder.id });
+                  setForm(null);
+                  setFolderOpen(null);
+                }
+              : undefined
+          }
+        />
+      )}
+      {filing && !searching && !current && folders.length > 0 && visible.length > 0 && <p className="muted small folder-hint">{t.dragHint}</p>}
+      {filing && current && !searching ? (
+        <div className="folder-window" role="region" aria-label={t.folderWindow(current.name)}>
+          <FolderBar folder={current} count={counts[current.id] ?? 0} onEdit={() => setForm({ edit: current.id })} onClose={() => setFolderOpen(null)} />
+          {list()}
+        </div>
+      ) : (
+        list()
+      )}
+      {drag && dragged && <NoteGhost drag={drag} subject={dragged.locked ? t.lockedNote : dragged.subject} />}
+    </section>
+  );
+
+  function list() {
+    return loading ? (
         <p className="empty">{t.loading}</p>
       ) : entries.length === 0 ? (
         <div className="empty">
@@ -321,7 +418,7 @@ export function Notes({
           <p>{t.firstNote}</p>
         </div>
       ) : visible.length === 0 ? (
-        <p className="empty">{t.nothingMatches}</p>
+        <p className="empty">{searching ? t.nothingMatches : current ? t.folderEmpty : t.deskAllFiled}</p>
       ) : (
         <ul className="note-list">
           {visible.map((e) => {
@@ -340,10 +437,16 @@ export function Notes({
                   />
                 </li>
               );
+            const inFolder = placed[e.id] ? folderById.get(placed[e.id]) : undefined;
             return (
-              <li key={e.id} className="note">
+              <li
+                key={e.id}
+                className={`note ${filing ? 'is-draggable' : ''} ${drag?.id === e.id ? 'is-lifted' : ''}`}
+                onPointerDown={filing ? (ev) => start(e.id, ev) : undefined}
+              >
                 <div className="note-head">
                   <h3 className="note-subject">{e.locked ? `🔒 ${t.lockedNote}` : e.subject}</h3>
+                  {searching && inFolder && <FolderChip folder={inFolder} />}
                   {pinnedId === e.id && <span className="tag tag-pinned">📌 {t.pinnedTag}</span>}
                   {e.pending && (
                     <span className="tag tag-pending" title={t.pendingTitle}>
@@ -357,6 +460,15 @@ export function Notes({
                 </time>
                 {e.locked && <p className="muted small">{t.lockedNoteBody}</p>}
                 {e.note && <p className={`note-body ${long && !expanded ? 'is-clamped' : ''}`}>{e.note}</p>}
+                {moveAsk === e.id && desk && (
+                  <MoveChooser
+                    desk={desk}
+                    current={placed[e.id] ?? null}
+                    subject={e.locked ? t.lockedNote : e.subject}
+                    onMove={(folder) => move(e.id, folder)}
+                    onCancel={() => setMoveAsk(null)}
+                  />
+                )}
                 {pinAsk === e.id && (
                   <div className="pin-ask" role="group" aria-label={t.pinNoteLabel(e.subject)}>
                     <p>{pinnedId ? t.pinConfirmReplace : t.pinConfirm}</p>
@@ -399,12 +511,27 @@ export function Notes({
                           onClick={() => {
                             setPinAsk(e.id);
                             setConfirm(null);
+                            setMoveAsk(null);
                           }}
                           aria-label={t.pinNoteLabel(e.subject)}
                         >
                           {t.pin}
                         </button>
                       )
+                    )}
+                    {filing && folders.length > 0 && confirm !== e.id && (
+                      <button
+                        className="link"
+                        onClick={() => {
+                          setMoveAsk(moveAsk === e.id ? null : e.id);
+                          setConfirm(null);
+                          setPinAsk(null);
+                        }}
+                        aria-label={t.moveNoteLabel(e.locked ? t.lockedNote : e.subject)}
+                        aria-expanded={moveAsk === e.id}
+                      >
+                        {t.move}
+                      </button>
                     )}
                     {!e.locked && confirm !== e.id && (
                       <button
@@ -433,6 +560,7 @@ export function Notes({
                         onClick={() => {
                           setConfirm(e.id);
                           setPinAsk(null);
+                          setMoveAsk(null);
                         }}
                       >
                         {t.del}
@@ -444,7 +572,6 @@ export function Notes({
             );
           })}
         </ul>
-      )}
-    </section>
-  );
+      );
+  }
 }

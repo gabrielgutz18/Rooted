@@ -3,8 +3,11 @@
 // that notice. The titles are read from the page, so adding an update doesn't break this.
 
 import { expect, test, type Locator, type Page } from '@playwright/test';
+import { freshBrowser } from './storage';
 
 const SHOTS = 'e2e/screenshots/landing-updates';
+
+test.use({ storageState: freshBrowser }); // a visitor who hasn't read the newest update yet
 
 test.beforeEach(({ page }) => {
   page.on('pageerror', (err) => {

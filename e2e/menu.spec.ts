@@ -26,7 +26,8 @@ test('the menu shows three links and a More folder; the folder opens, shuts, and
   // shut: just the three big links and the folder
   await expect(nav(page).locator('.side-link')).toHaveText([/^My tree/, /^My profile/, /^Choose tree · Oak/, /^More/]);
   await expect(folder(page)).toHaveAttribute('aria-expanded', 'false');
-  await expect(folder(page).locator('.new-tag')).toHaveText('New'); // an update inside hasn't been read
+  // no New: the newest update opens by itself once, so it has been read (e2e/updates.spec.ts)
+  await expect(folder(page).locator('.new-tag')).toHaveCount(0);
   await expect(page.getByRole('button', { name: 'About the developer' })).toHaveCount(0);
   await page.waitForTimeout(400);
   await side(page).screenshot({ path: `${SHOTS}/1-folder-shut.png` });
@@ -34,8 +35,7 @@ test('the menu shows three links and a More folder; the folder opens, shuts, and
   // open: the rest, as a light list under it
   await folder(page).click();
   await expect(folder(page)).toHaveAttribute('aria-expanded', 'true');
-  await expect(inside(page)).toHaveText([/^Updates\s*New$/, 'Install app', 'Admin · users', 'About the developer']);
-  await expect(folder(page).locator('.new-tag')).toHaveCount(0); // it's on Updates now
+  await expect(inside(page)).toHaveText(['Updates', 'Install app', 'Admin · users', 'About the developer']);
   // the folder's links are lighter than the big ones: no box around them until hovered
   const shadow = await inside(page).first().evaluate((el) => getComputedStyle(el).boxShadow);
   expect(shadow).toBe('none');

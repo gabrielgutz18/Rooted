@@ -4,6 +4,7 @@
 // Cleared when you sign out, so the next person on a shared device can't see it.
 
 import type { Entry, Profile, SharedNote } from './backend';
+import type { Desk } from './folders';
 
 export interface Snapshot {
   me: Profile | null;
@@ -11,6 +12,8 @@ export interface Snapshot {
   people: Profile[];
   /** the note you pinned to share (missing in copies saved before pinning existed) */
   pin?: SharedNote | null;
+  /** your note folders (missing in copies saved before folders existed) */
+  desk?: Desk;
 }
 
 const PREFIX = 'rooted.cache.v1.';

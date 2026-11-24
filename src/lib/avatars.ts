@@ -1001,8 +1001,8 @@ function rgb(color: string) {
   return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
 }
 const toHex = (c: number[]) => `#${c.map((v) => Math.max(0, Math.min(255, Math.round(v))).toString(16).padStart(2, '0')).join('')}`;
-const shade = (color: string, f: number) => toHex(rgb(color).map((v) => v * f));
-const lighten = (color: string, f: number) => toHex(rgb(color).map((v) => v + (255 - v) * f));
+export const shade = (color: string, f: number) => toHex(rgb(color).map((v) => v * f));
+export const lighten = (color: string, f: number) => toHex(rgb(color).map((v) => v + (255 - v) * f));
 export const luminance = (color: string) => {
   const [r, g, b] = rgb(color);
   return r * 0.3 + g * 0.59 + b * 0.11;

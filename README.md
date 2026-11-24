@@ -155,6 +155,23 @@ setting (e.g. `SITE_URL=https://rooted.example.com`). After changing the landing
 retake the picture with `SHOWCASE=1 npx playwright test -c playwright.showcase.config.ts share`.
 Facebook keeps a copy of a preview for a while; its Sharing Debugger fetches it again.
 
+## Update notices
+
+What's new is written as a letter on a scroll, in English and Tagalog, with screenshots
+(`src/lib/updates.ts`, pictures in `src/assets/updates`). To announce something, add an entry
+at the **top** of `UPDATES` with a new `id`:
+
+- The next time each member **signs in or opens the app**, the scroll opens by itself, once
+  (remembered per browser). It waits for anything asked first (a username, the first tree,
+  the recovery key) and until the tree is showing. A brand-new account isn't shown it, since
+  everything is new to them; they get the next one.
+- **Menu → Updates** opens it any time, marked **New** until it has been read.
+- The landing page shows the newest notices too.
+
+Changing an update that is already online, without a new `id`, doesn't open it again for
+anyone who has read it. The browser tests start with the newest update read
+(`e2e/storage.ts`); `e2e/updates.spec.ts` tests the notice itself.
+
 ## Where things are
 
 | What | File |
@@ -183,6 +200,9 @@ Facebook keeps a copy of a preview for a while; its Sharing Debugger fetches it 
 | Profile icons: the pixel art, background colours and how they're drawn | `src/lib/avatars.ts`, `src/components/Avatar.tsx` |
 | Pinned (shared) notes: the paper card under the tree, Profile → Shared note | `src/components/SharedNote.tsx` |
 | Choosing or changing a username, password resets (server) | `supabase/functions/account/index.ts` |
+| Note folders: colours, icons, the pixel folder, saving changes | `src/lib/folders.ts` |
+| The desktop in My notes (folders, open folder window, Move) | `src/components/Folders.tsx`, `src/components/Diary.tsx` |
+| Press-and-hold dragging (mouse and touch) | `src/lib/drag.ts` |
 
 ## Sharing a note
 
@@ -205,6 +225,33 @@ their profile, and changing the username later keeps the real name. Needs
 `supabase/migrations/20261122000003_real_names.sql`; until it is run, saving a name asks for that
 update.
 
+## Folders
+
+**My notes** is a little desktop. Members make pixel folders (**New folder**: a name, one of
+18 colours and, if they like, one of 19 little icons stamped on the front: cross, Bible, dove,
+fish, church…) and keep related notes in them, like an "Evangelism" folder for evangelism notes.
+Colours and icons are drawn in `src/lib/folders.ts`; new ones can be added there (never rename
+or remove one: saved folders refer to them by id).
+
+- **Press and hold** a note until it lifts, then drag it onto a folder, with a mouse or a
+  finger. A quick swipe still scrolls and a quick mouse drag still selects text; only holding
+  still first picks a note up. While a note is lifted, the folders stay in view and the page
+  scrolls near the top and bottom of the screen. Escape puts the note back.
+- **Tap a folder** to open it as a window in its colour, with its notes. **Edit** in its title
+  bar changes its name, icon (listed first) or colour, or deletes it (its notes go back to the
+  desktop; no note is deleted). The form scrolls fully into view and, when editing, leaves the
+  name unfocused so a phone's keyboard doesn't cover the icons. To take a note out, drag it
+  onto **Back to desktop**.
+- **Move** on any note does the same without dragging (for keyboards and screen readers).
+- A note is in one folder at most. Search looks through every note and shows each one's folder.
+
+Folders are **locked like notes**: each member's whole desk (folder names, colours, and which
+note is in which) is saved as one encrypted value in `note_desks`, so the database can't read a
+folder's name. Changes wait on the device and are applied to a freshly loaded desk when saved
+(so two devices rarely overwrite each other), and offline they upload later with the notes.
+Needs `supabase/migrations/20261123000000_note_folders.sql`; until it is run the app works as
+before and making a folder asks for that update.
+
 ## Privacy
 
 Notes are **end-to-end encrypted**. They are locked in the browser before they are sent,
@@ -215,7 +262,7 @@ dashboard's table editor or SQL editor).
 - **What stays readable** (the tree and squares need it): each note's points and date, the
   number of notes, the profile (name, username, tree), and the one note a member chose to pin
   (see Sharing a note). Subject, note text and tags are
-  locked. Emails exist only for the admin and for members who joined before usernames, and
+  locked, and so are note folders (see Folders). Emails exist only for the admin and for members who joined before usernames, and
   only the admin can see them.
 - **How the key works:** each person has a random note key (AES-256-GCM). The server
   only stores it locked twice (`note_keys` table): once with a key made from their password
