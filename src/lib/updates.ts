@@ -49,6 +49,7 @@ import landCoconut from '../assets/updates/land-coconut.png';
 import noteFolders from '../assets/updates/note-folders.png';
 import folderOpen from '../assets/updates/folder-open.png';
 import folderIcons from '../assets/updates/folder-icons.png';
+import landBombax from '../assets/updates/land-bombax.png';
 
 type Text = Record<Lang, string>;
 
@@ -79,6 +80,33 @@ const days = (n: number): Text => ({ en: `${n} ${n === 1 ? 'day' : 'days'}`, tl:
 const cap = (s: string) => s[0].toUpperCase() + s.slice(1);
 
 export const UPDATES: Update[] = [
+  {
+    id: '2026-11-24-bombax',
+    date: '2026-11-24',
+    title: { en: 'A new tree: the bombax', tl: 'Bagong puno: ang malabulak' },
+    intro: {
+      en: 'The bombax, or red silk cotton tree, now grows in Rooted. In its season it drops its leaves and covers its bare branches in big red flowers.',
+      tl: 'Tumutubo na sa Rooted ang malabulak (bombax). Sa kapanahunan nito, nalalagas ang mga dahon nito at napupuno ng malalaking pulang bulaklak ang mga hubad na sanga.',
+    },
+    sections: [
+      {
+        heading: { en: 'Red flowers over the rice fields of Vietnam', tl: 'Mga pulang bulaklak sa ibabaw ng palayan ng Vietnam' },
+        text: {
+          en: 'Its pale trunk forks into crooked, spreading branches, and every flower has a yellow heart. The flowers fall whole and lie red on the grass. It grows in Vietnam, among rice paddies and limestone peaks, where a farmer leads a water buffalo. Choose it from the menu (Choose tree) — your growth stays the same.',
+          tl: 'Nagsasanga ang maputla nitong katawan sa mga baluktot at nakabukang sanga, at may dilaw na puso ang bawat bulaklak. Buo kung malaglag ang mga bulaklak at nakahiga itong pula sa damuhan. Tumutubo ito sa Vietnam, sa gitna ng mga palayan at mga bundok na batong-apog, kung saan may magsasakang umaakay sa kalabaw. Piliin ito sa menu (Pumili ng puno) — mananatili ang iyong paglago.',
+        },
+        pictures: [
+          {
+            src: landBombax,
+            alt: {
+              en: 'A grown bombax covered in red flowers at noon, with rice paddies, limestone peaks and a farmer leading a water buffalo',
+              tl: 'Isang malaking malabulak na puno ng pulang bulaklak sa tanghali, may mga palayan, mga bundok na batong-apog at magsasakang umaakay sa kalabaw',
+            },
+          },
+        ],
+      },
+    ],
+  },
   {
     id: '2026-11-24-note-folders',
     date: '2026-11-24',

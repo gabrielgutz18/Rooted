@@ -1,13 +1,14 @@
 // The trees you can grow. Each one is a palette plus a few numbers that shape how
-// the branches split; the pine has its own builder because it grows in tiers, and the
-// coconut palm its own because it doesn't branch at all (src/scene/palm.ts draws it).
+// the branches split; the pine has its own builder because it grows in tiers, the bombax
+// its own because its branches bend at every joint, and the coconut palm its own because
+// it doesn't branch at all (src/scene/palm.ts draws it).
 
 import { clamp, mulberry32, TAU } from './raster';
 
 export type SpeciesId =
   | 'oak' | 'sakura' | 'maple' | 'apple' | 'birch' | 'willow' | 'pine'
   | 'jacaranda' | 'eucalyptus' | 'socotra' | 'poinciana' | 'goldenshower' | 'magnolia'
-  | 'spruce' | 'silktree' | 'baobab' | 'ginkgo' | 'trumpet' | 'monkeypuzzle' | 'coconut';
+  | 'spruce' | 'silktree' | 'baobab' | 'ginkgo' | 'trumpet' | 'monkeypuzzle' | 'coconut' | 'bombax';
 
 interface Shape {
   maxd: number; // how many times branches split
@@ -35,6 +36,17 @@ interface Conifer {
   dome?: boolean; // boughs longest in the middle (an umbrella), not at the bottom (a cone)
 }
 
+/** How a bombax branches: a clear trunk forking into rising limbs that split again and again, crooked. */
+interface Crooked {
+  fork: number; // where the trunk forks, as a share of height
+  limbs: number; // how long the main limbs are, as a share of height
+  fan: number; // how far the outermost main limbs lean out from upright (radians)
+  kink: number; // how much a branch bends at each joint (radians, either way)
+  spread: number; // how far a side branch turns away from its limb (radians)
+  decay: number; // a branch's length, as a share of its limb's
+  curl: number; // how much each stretch turns back toward upright
+}
+
 export interface Species {
   id: SpeciesId;
   name: string;
@@ -43,8 +55,11 @@ export interface Species {
   barkOutline: string;
   birch?: boolean;
   leaves: string[]; // [0] is the outline, then dark → light
-  foliage: 'round' | 'blossom' | 'willow' | 'pine' | 'palm';
+  /** 'cluster': separate flowers on bare twigs, with the branches showing between them. */
+  foliage: 'round' | 'blossom' | 'willow' | 'pine' | 'palm' | 'cluster';
   flower?: string;
+  /** A cluster's green calyxes and buds. */
+  bud?: string;
   fruit?: string;
   /** Big flowers sitting on the leaves (magnolia, silk tree). */
   bloom?: string;
@@ -53,6 +68,7 @@ export interface Species {
   /** Chains hanging from the leaves: their colours (outline, then dark → light) and length. */
   hang?: { colors: string[]; len: number };
   conifer?: Conifer;
+  crooked?: Crooked;
   fall: string[]; // what drifts down from it
   fallKind: 'leaf' | 'petal';
   fallRate: number;
@@ -335,6 +351,22 @@ export const SPECIES: Species[] = [
     fallRate: 0.3,
     shape: { maxd: 0, height: 1.08, trunk: 0, trunkR: 0.034, spread: 0, spreadVar: 0, light: 0, decay: 0, kids3: 0, leaf: 1, squash: 0.5 },
   },
+  {
+    id: 'bombax',
+    name: 'Bombax',
+    blurb: 'Big red flowers on bare, spreading branches.',
+    bark: ['#3a3430', '#5a524b', '#7c7268', '#9e9387', '#bcb1a2', '#d6ccbc'],
+    barkOutline: '#1c1714',
+    leaves: ['#2a0406', '#5a080e', '#8a0e16', '#b4141c', '#d41c22', '#ea2c2a', '#f84a38', '#ff7a5c'],
+    foliage: 'cluster',
+    flower: '#ffd040', // the stamens
+    bud: '#4a5222',
+    crooked: { fork: 0.4, limbs: 0.44, fan: 0.62, kink: 0.32, spread: 0.6, decay: 0.6, curl: 0.1 },
+    fall: ['#d41c22', '#ea2c2a', '#b4141c', '#f84a38'],
+    fallKind: 'petal',
+    fallRate: 2,
+    shape: { maxd: 0, height: 1.1, trunk: 0, trunkR: 0.042, spread: 0, spreadVar: 0, light: 0, decay: 0, kids3: 0, leaf: 0.4, squash: 0.72 },
+  },
 ];
 
 export function speciesOf(id: string | null | undefined): Species {
@@ -382,6 +414,7 @@ export interface Tree {
 export function buildTree(sp: Species, seed: number, g: number): Tree {
   if (sp.foliage === 'pine') return buildConifer(sp, seed, g);
   if (sp.foliage === 'palm') return buildPalm(sp, seed, g);
+  if (sp.crooked) return buildCrooked(sp, sp.crooked, seed, g);
   const sh = sp.shape;
   const taper = sh.taper ?? 0.7;
   const rng = mulberry32(seed);
@@ -476,6 +509,116 @@ function buildConifer(sp: Species, seed: number, g: number): Tree {
       }
     }
     parent = idx;
+  }
+  return { nodes, S, sprout: false };
+}
+
+/**
+ * A bombax: a clear trunk, leaning a little and turning back up, that forks into a few limbs
+ * rising out in a fan, with now and then a low limb reaching out nearly level. Every limb
+ * bends at its joints, sends off side branches and ends in a fork, again and again, so the
+ * crown comes out crooked and uneven; flowers sit all along the outer twigs. The random
+ * numbers are drawn the same way at every size, so the tree grows instead of reshuffling:
+ * the outer levels only grow out as it does.
+ */
+function buildCrooked(sp: Species, ck: Crooked, seed: number, g: number): Tree {
+  const sh = sp.shape;
+  const S = (5 + 150 * Math.pow(g, 1.15)) * sh.height;
+  const r0 = Math.max(0.7, S * sh.trunkR);
+  const leafBase = clamp(1.4 + S * 0.065, 1.8, 12) * sh.leaf;
+  const rng = mulberry32(seed);
+  const nodes: TNode[] = [];
+  if (g < 0.1) {
+    // a seedling: just a stem with its first leaves
+    nodes.push({
+      parent: -1, off: -Math.PI / 2 + (rng() - 0.5) * 0.1, len: S * 0.3, r0, r1: r0 * 0.7, depth: 0, flex: 0, at: 0,
+      phase: rng() * TAU, leaf: Math.max(1.3, leafBase * 3), ls: (rng() * 1e9) | 0, squash: sh.squash,
+    });
+    return { nodes, S, sprout: true };
+  }
+  const UP = -Math.PI / 2;
+  const MAXD = 4;
+  const L = g * (MAXD + 0.5); // how many levels of branches have grown out
+  const deep = Math.max(1, Math.min(MAXD, Math.ceil(L))); // the outermost level, still growing
+  const fDeep = clamp(L - deep + 1, 0, 1);
+
+  /**
+   * Adds one stretch of branch, unless its level hasn't grown yet (then -2). Flowers sit at the
+   * tips of the outermost twigs and here and there along them; the level inside keeps a few,
+   * smaller as the twigs beyond it grow out, so the fine twigs show between the flowers.
+   */
+  const add = (parent: number, abs: number, parentAbs: number, len: number, ra: number, rb: number, d: number, at: number, tip: boolean) => {
+    const phase = rng() * TAU, ls = (rng() * 1e9) | 0, jit = rng(), chance = rng(); // always drawn, so the rest stay put
+    const f = d === 0 ? 1 : clamp(L - d + 1, 0, 1);
+    if (parent === -2 || f < 0.03) return -2;
+    const k = d === 0 ? 0 : d === deep ? (tip || chance < 0.75 ? 1 : 0) : d === deep - 1 ? (tip || chance < 0.45 ? 1 - 0.5 * fDeep : 0) : 0;
+    nodes.push({
+      parent, off: abs - parentAbs, len: len * f, r0: ra * Math.max(f, 0.45), r1: rb * Math.max(f, 0.45), depth: d,
+      flex: d === 0 ? 0.05 : d * 0.9, at, phase, ls, squash: sh.squash,
+      leaf: k > 0 ? Math.max(1.3, leafBase * k * (tip ? 1 : 0.75) * (0.7 + jit * 0.6) * f) : 0,
+    });
+    return nodes.length - 1;
+  };
+
+  /** A limb in two or three crooked stretches, with side branches at its joints and a fork at its end. */
+  const limb = (parent: number, parentAbs: number, at: number, abs: number, len: number, r: number, d: number) => {
+    const nseg = d <= 1 ? 3 : 2;
+    const kink = ck.kink * (d <= 1 ? 0.6 : 1);
+    let p = parent, pAbs = parentAbs, a = abs, rr = r;
+    // the first side branch grows away from the middle of the crown, so few cross it
+    const out = a > UP ? 1 : -1;
+    let side = rng() < 0.75 ? out : -out;
+    for (let s = 0; s < nseg; s++) {
+      const kv = rng(), lv = rng();
+      if (s > 0) a += (kv - 0.5) * 2 * kink + (UP - a) * ck.curl; // a bend at the joint, reaching for the light
+      a = clamp(a, -Math.PI - 0.3, 0.3); // never hanging far below level
+      const r1 = Math.max(0.4, rr * 0.8);
+      const sl0 = (len / nseg) * (0.8 + lv * 0.4);
+      const idx = add(p, a, pAbs, sl0, rr, r1, d, s === 0 ? at : 1, s === nseg - 1);
+      if (d === MAXD && s === nseg - 1) {
+        // the bare tip of the twig pokes out past its flowers
+        const go = rng() < 0.6, ta = a + (rng() - 0.5) * 2 * kink;
+        if (go) add(idx, ta, a, sl0 * 0.8, 0.4, 0.4, MAXD + 1, 1, false); // a level of its own: it grows out last, bare
+      }
+      if (s < nseg - 1) {
+        const go = rng() < 0.8, sa = a + side * (ck.spread + rng() * 0.5), sl = len * ck.decay * (0.6 + rng() * 0.3), sat = 0.55 + rng() * 0.45;
+        if (go && d < MAXD) limb(idx, a, sat, sa, sl * (side === out ? 1 : 0.7), r1 * 0.7, d + 1); // shorter toward the middle
+        side = -side;
+      } else if (d < MAXD) {
+        const sp2 = 0.25 + rng() * 0.35, tilt = (rng() - 0.5) * 0.3, l1 = rng(), l2 = rng();
+        limb(idx, a, 1, a - sp2 + tilt, len * ck.decay * (0.8 + l1 * 0.3), r1 * 0.72, d + 1);
+        limb(idx, a, 1, a + sp2 + tilt, len * ck.decay * (0.8 + l2 * 0.3), r1 * 0.72, d + 1);
+      }
+      p = idx;
+      pAbs = a;
+      rr = r1;
+    }
+  };
+
+  // the trunk: leaning a little one way, then turning back up toward the fork
+  const lean = (rng() - 0.5) * 0.24;
+  let p = -1, pAbs = 0, a = UP + lean, rr = r0;
+  for (let s = 0; s < 3; s++) {
+    if (s > 0) a += (UP - a) * 0.45 + (rng() - 0.5) * 0.08;
+    else rng();
+    const r1 = rr * 0.86;
+    const idx = add(p, a, pAbs, (S * ck.fork) / 3, rr, r1, 0, 1, false);
+    // now and then a low limb, reaching out nearly level
+    if (s >= 1) {
+      const go = rng() < 0.5, sd = rng() < 0.5 ? -1 : 1, la = UP + sd * (1.05 + rng() * 0.3), ll = S * ck.limbs * (0.7 + rng() * 0.3), lat = 0.4 + rng() * 0.5;
+      if (go) limb(idx, a, lat, la, ll, r1 * 0.42, 1);
+    }
+    p = idx;
+    pAbs = a;
+    rr = r1;
+  }
+  // the fork: a few limbs fanning out and up, the middle ones longest
+  const K = 3 + (rng() < 0.45 ? 1 : 0);
+  for (let k = 0; k < K; k++) {
+    const u = k / (K - 1) - 0.5; // -0.5 … 0.5 across the fan
+    const la = UP + lean * 0.4 + u * 2 * ck.fan + (rng() - 0.5) * 0.25;
+    const ll = S * ck.limbs * (0.8 + rng() * 0.35) * (1 - Math.abs(u) * 0.3);
+    limb(p, pAbs, 1, la, ll, rr * (0.55 + 0.15 * (1 - Math.abs(u) * 2)), 1);
   }
   return { nodes, S, sprout: false };
 }

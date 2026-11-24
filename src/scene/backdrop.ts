@@ -309,6 +309,7 @@ export function buildBackdrop(W: number, H: number, gy: number, stops: [string, 
         else if (shape === 'willow') inside = dy <= r * 1.25 && dx * dx + (dy < 0 ? dy * dy : dy * dy * 0.35) <= r * r;
         else if (shape === 'birch') inside = dx * dx * 1.6 + dy * dy * 0.75 <= r * r;
         else if (shape === 'blossom') inside = dx * dx + dy * dy * 1.25 <= r * r;
+        else if (shape === 'cluster') inside = dx * dx * 1.2 + dy * dy * 0.9 <= r * r && h2(x, y + 5) < 0.78; // open, the twigs between
         else inside = dx * dx + dy * dy <= r * r;
         if (!inside) continue;
         const v = (-dx * lxP * 0.7 - dy * 0.7) / r + (bayer(x, y) - 0.5) * 0.8;
@@ -718,6 +719,32 @@ function drawLandmark(
       for (const k of [-2, 2]) rect(x + k * u, yb - 6 * u, thin, 4 * u, bambooDk); // the canopy's posts
       row(7, 6, red);
       row(5, 7, redLt);
+      break;
+    }
+    case 'buffalo': {
+      // a water buffalo in the paddy with its curved horns, and a farmer beside it in a nón lá
+      const hide = col('#4a4a54'), hideLt = col('#6a6a76'), hideDk = col('#30303a'), horn = col('#e2d8c4');
+      const hat = col('#ead9a0'), hatDk = col('#b8a46a'), shirt = col('#3e6a8a'), skin = col('#c8946a'), dark = col('#2a2428');
+      const bx = x - 2 * u; // the buffalo faces left
+      for (const k of [-4, -3, 2, 3]) rect(bx + k * u, yb - 2 * u, u, 2 * u, k === -3 || k === 3 ? hideDk : hide); // legs
+      rect(bx - 4 * u, yb - 5 * u, 9 * u, 3 * u, hide); // the body, with a lit back
+      rect(bx - 4 * u, yb - 5 * u, 9 * u, u, hideLt);
+      rect(bx - 3 * u, yb - 6 * u, 3 * u, u, hide); // the hump over the shoulders
+      rect(bx + 5 * u, yb - 5 * u, thin, 3 * u, hideDk); // the tail
+      rect(bx - 7 * u, yb - 5 * u, 3 * u, 2 * u, hide); // the head, held low
+      rect(bx - 8 * u, yb - 4 * u, u, u, hideDk); // the muzzle
+      rect(bx - 8 * u, yb - 6 * u, u, u, horn); // horns sweeping back
+      rect(bx - 7 * u, yb - 7 * u, 2 * u, u, horn);
+      rect(bx - 5 * u, yb - 6 * u, u, u, horn);
+      const fx = bx - 12 * u; // the farmer, walking ahead and leading it by a rope
+      rect(fx, yb - 2 * u, u, 2 * u, dark);
+      rect(fx - Math.floor(u / 2), yb - 5 * u, 2 * u, 3 * u, shirt);
+      rect(fx, yb - 6 * u, u, u, skin);
+      rect(fx - 2 * u, yb - 7 * u, 5 * u, u, hatDk); // the conical hat
+      rect(fx - u, yb - 8 * u, 3 * u, u, hat);
+      rect(fx, yb - 9 * u, u, u, hat);
+      rect(fx + u, yb - 4 * u, 2 * u, thin, dark); // the rope, sagging to the buffalo's nose
+      rect(fx + 3 * u, yb - 4 * u + thin, u, thin, dark);
       break;
     }
   }

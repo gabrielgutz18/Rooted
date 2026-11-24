@@ -857,6 +857,7 @@ const tl: Strings = {
     ginkgo: { name: 'Ginkgo', blurb: 'Gintong dahong hugis-pamaypay mula sa sinaunang lahi.', land: 'silangang Tsina' },
     trumpet: { name: 'Rosas na Trumpeta', blurb: 'Biglang namumulaklak ng rosas ang mga hubad na sanga.', land: 'Brazil' },
     monkeypuzzle: { name: 'Monkey Puzzle', blurb: 'Matinik na sangang parang lubid mula pa sa panahon ng mga dinosaur.', land: 'Chile' },
+    bombax: { name: 'Malabulak', blurb: 'Malalaking pulang bulaklak sa hubad at nakabukang mga sanga.', land: 'Vietnam' },
     coconut: { name: 'Niyog', blurb: 'Umiindayog na mga palapa at bunga ng niyog sa tabing-dagat.', land: 'mga tabing-dagat sa tropiko' },
   },
   nativeTo: (land) => `Katutubo sa ${land}`,

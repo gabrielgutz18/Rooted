@@ -10,7 +10,7 @@ export type Far =
 export type Landmark =
   | 'pagoda' | 'spire' | 'yurt' | 'onion' | 'bridge' | 'hut' | 'canoe'
   | 'adobe' | 'vinta' | 'dhow' | 'tranogasy' | 'chhatri' | 'farmhouse' | 'cabin' | 'windcatcher' | 'rondavel'
-  | 'paifang' | 'church' | 'ruka' | 'bangka';
+  | 'paifang' | 'church' | 'ruka' | 'bangka' | 'buffalo';
 
 export interface Land {
   /** The place, in English (the Tagalog name is in src/lib/i18n.tsx). */
@@ -218,6 +218,14 @@ export const LANDS: Record<SpeciesId, Land> = {
     landmark: 'ruka',
     landmarkAt: -0.27,
     peakAt: 0.2,
+  },
+  bombax: {
+    name: 'Vietnam',
+    far: 'karst', // the limestone towers of Ninh Bình, rising out of the rice
+    hills: { base: 0.05, amp: 0.04, freq: 2.2, colors: ['#7cb64e', '#68a244'], terraces: true }, // flat paddies
+    farTrees: 0.1,
+    landmark: 'buffalo',
+    landmarkAt: -0.28,
   },
   coconut: {
     name: 'tropical beaches',

@@ -99,6 +99,7 @@ interface Pal {
   sproutLeaves: number[];
   stem: number[];
   flower: number;
+  bud: number;
   fruit: number;
   bloom: number;
   hang: number[];
@@ -315,10 +316,14 @@ export class Scene {
       barkOut: grade(hex(sp.barkOutline), G),
       root: bark.map((c) => scalec(c, 0.72)),
       leaves,
-      leavesBack: leaves.map((c, i) => (i === 0 ? c : scalec(mixc(c, backTint, 0.18), 0.8))),
-      sproutLeaves: sp.foliage === 'blossom' ? gradeDry(GREEN) : leaves,
+      // (flowers behind just step one shade down: the blue tint would turn red ones brown)
+      leavesBack: leaves.map((c, i) =>
+        i === 0 ? c : sp.foliage === 'cluster' ? scalec(leaves[Math.max(1, i - 1)], 0.94) : scalec(mixc(c, backTint, 0.18), 0.8),
+      ),
+      sproutLeaves: sp.foliage === 'blossom' || sp.foliage === 'cluster' ? gradeDry(GREEN) : leaves,
       stem: gradeAll(STEM, G),
       flower: grade(hex(sp.flower ?? '#ffffff'), G),
+      bud: grade(hex(sp.bud ?? '#4e5a26'), G),
       fruit: sp.fruit ? grade(hex(sp.fruit), G) : 0,
       bloom: sp.bloom && !dk ? grade(hex(sp.bloom), G) : 0, // a drying tree has dropped its flowers
       hang: sp.hang ? gradeDry(sp.hang.colors) : [],
@@ -552,6 +557,19 @@ export class Scene {
           const u = (x - mid) / half;
           p.blend(x, y, pal.shadow, (1 - u * u) * 0.3);
         }
+      // a bombax drops its flowers whole, and they lie on the grass under it, thickest by the trunk
+      if (sp.foliage === 'cluster' && stage >= 2) {
+        const lv = pal.leaves, count = Math.round(half * 0.45 * clamp((stage - 1) / 4, 0.3, 1) * (1 - bare));
+        for (let i = 0; i < count; i++) {
+          const u = h2(i, this.seed % 977 + 401) * 2 - 1;
+          const x = Math.round(mid + Math.sign(u) * Math.pow(Math.abs(u), 1.5) * half * 0.95);
+          const y = gy - Math.floor(h2(i, this.seed % 977 + 402) * 3);
+          p.put(x - 1, y, lv[3]);
+          p.put(x, y, lv[5]);
+          p.put(x + 1, y, lv[3]);
+          p.put(x, y - 1, h2(i, 403) < 0.4 ? pal.flower : lv[6]);
+        }
+      }
     }
 
     const animals = this.opts.animals;
@@ -565,8 +583,8 @@ export class Scene {
 
     // ----- the tree -----
     const leafLen = pine ? clamp(1.2 + z, 2, 4.5) : clamp(1.4 + z * 1.25, 2.4, 6.5);
-    const leafWid = pine ? 0.6 : sp.foliage === 'blossom' ? leafLen * 0.7 : leafLen * 0.5;
-    const style: ClumpStyle = pine ? 'pine' : sp.foliage === 'blossom' ? 'blossom' : 'round';
+    const leafWid = pine ? 0.6 : sp.foliage === 'blossom' || sp.foliage === 'cluster' ? leafLen * 0.7 : leafLen * 0.5;
+    const style: ClumpStyle = pine ? 'pine' : sp.foliage === 'blossom' || sp.foliage === 'cluster' ? sp.foliage : 'round';
     const keyBase = `${sp.id}|${period}|${lxq}|${dry}`;
     const wood = this.woodRamp(sp, period, pal, g);
     const rf = clamp(0.4 + g * 4, 0.4, 1) * z; // seedlings get thinner stems
@@ -834,12 +852,12 @@ export class Scene {
     const p = this.pix;
     const ramp = back ? pal.leavesBack : pal.leaves;
     const variant = c.ls % 6;
-    const spr = clumpSprite(`${keyBase}|${back ? 'b' : 'f'}|${style}`, c.r, variant, c.squash, style, ramp, pal.flower, L);
+    const spr = clumpSprite(`${keyBase}|${back ? 'b' : 'f'}|${style}`, c.r, variant, c.squash, style, ramp, pal.flower, L, pal.bud);
     blit(p, spr, c.x - spr.ox, c.y - spr.oy);
 
-    // loose leaves round the edge flutter and flip over in the wind
+    // loose leaves round the edge flutter and flip over in the wind (an open cluster has fewer)
     const list = edgeLeaves(variant);
-    const K = Math.min(EDGE_MAX, Math.max(3, Math.round(c.r * (back ? 1 : 1.8))));
+    const K = Math.min(EDGE_MAX, Math.max(style === 'cluster' ? 1 : 3, Math.round(c.r * (back ? 1 : 1.8) * (style === 'cluster' ? 0.35 : 1))));
     const gs = gust(c.x);
     const amp = 0.25 + gs * 0.95;
     const n = ramp.length;

@@ -28,7 +28,9 @@ test('a new update opens by itself, with pictures, once', async ({ page }) => {
   await expect(scroll).toBeVisible(); // nothing clicked
   await expect(scroll.locator('.scroll-update').first().locator('.scroll-new')).toHaveText('New');
   expect(await seen(page)).toBe(LATEST_UPDATE);
-  // the newest: folders for notes; before it, Jesus visiting your tree, and the coconut palm
+  // the newest: the bombax; before it, folders for notes, Jesus visiting your tree, and the coconut palm
+  await expect(scroll.getByRole('heading', { name: 'A new tree: the bombax', exact: true })).toBeVisible();
+  await expect(scroll.getByRole('heading', { name: 'Red flowers over the rice fields of Vietnam' })).toBeVisible();
   await expect(scroll.getByRole('heading', { name: 'Folders for your notes', exact: true })).toBeVisible();
   await expect(scroll.getByRole('heading', { name: '18 colors and 19 icons' })).toBeVisible();
   await expect(scroll.getByRole('heading', { name: 'Jesus visits your tree', exact: true })).toBeVisible();
