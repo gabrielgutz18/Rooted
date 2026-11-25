@@ -9,6 +9,9 @@ interface Theme {
   points: number;
   // matched at the start of a word, so "pray" also finds "prayed", "prayer"
   stems: string[];
+  // matched only as whole words, for short names like "SOL" that would otherwise
+  // also find "solve", "solid", "solo"
+  words?: string[];
   // Tagalog roots, matched anywhere inside a word, because Tagalog wraps affixes
   // around the root: "dasal" finds nagdasal, magdarasal is "darasal", ipinagdasal…
   roots?: string[];
@@ -26,9 +29,19 @@ export const THEMES: Theme[] = [
     roots: ['tipon', 'disipul'],
   },
   {
+    // the church's discipleship classes: SUYNL (Start Up Your New Life), Life Class,
+    // the School of Leaders (SOL 1, 2, 3) and the Encounter retreats around them
+    id: 'class', label: 'Discipleship class', points: 10,
+    stems: [
+      'suynl', 'sunyl', 'start up your new life', 'life class', 'lifeclass', 'school of leaders', 'school of leadership',
+      'encounter retreat', 'encounter weekend', 'pre-encounter', 'post-encounter', 're-encounter',
+    ],
+    words: ['sol'],
+  },
+  {
     id: 'study', label: 'Study', points: 8,
     stems: [
-      'bible', 'biblia', 'bibliya', 'scripture', 'study', 'studied', 'studying', 'lesson', 'christian life', 'sunyl', 'devotion', 'quiet time', 'verse', 'chapter', 'memoriz',
+      'bible', 'biblia', 'bibliya', 'scripture', 'study', 'studied', 'studying', 'lesson', 'christian life', 'devotion', 'quiet time', 'verse', 'chapter', 'memoriz',
       'aral', 'aaral', 'salita ng diyos', 'salita ng dios', 'kasulatan', 'talata', 'kabanata', 'debosyon', 'leksyon', 'leksiyon',
     ],
     roots: ['saulo'],
@@ -74,8 +87,11 @@ const REF = new RegExp(`\\b(?:[1-3]\\s?)?(?:${BOOKS})\\s+\\d{1,3}(?::\\d{1,3}(?:
 
 const escape = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 const THEME_RE = THEMES.map((t) => {
-  const stems = `(?<![a-z])(?:${t.stems.map(escape).join('|')})`;
-  return new RegExp(t.roots?.length ? `${stems}|${t.roots.map(escape).join('|')}` : stems, 'g');
+  const any = (list: string[]) => list.map(escape).join('|');
+  const parts = [`(?<![a-z])(?:${any(t.stems)})`];
+  if (t.words?.length) parts.push(`(?<![a-z])(?:${any(t.words)})(?![a-z])`);
+  if (t.roots?.length) parts.push(any(t.roots));
+  return new RegExp(parts.join('|'), 'g');
 });
 
 export const MAX_POINTS = 60;

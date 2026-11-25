@@ -1095,6 +1095,7 @@ const tl: Strings = {
   tags: {
     Church: 'Simbahan',
     'Cell group': 'Cell group',
+    'Discipleship class': 'Klase sa pagdidisipulo',
     Study: 'Pag-aaral',
     Prayer: 'Panalangin',
     Serving: 'Paglilingkod',
